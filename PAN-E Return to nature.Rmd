@@ -32,13 +32,16 @@ Here we use the Google mobility data to find the t-value for all countries befor
 ## Global trend - parks, residential and transport
 
 ```{r, error=FALSE, warning=FALSE}
+
+# These data were downloaded in October 2020
 google <- read.csv("Global_Mobility_Report (2).csv")
 
 # R reads Namibia's iso2 code is as an "is.na" object, so we will rename it to NA
 google$country_region_code[is.na(google$country_region_code)] <-"NA"
 
-# Add the country codes so we ensure everything matches 
 library(countrycode)
+
+# Add the country codes so we ensure everything matches 
 google$ISO2 <- google$country_region_code
 google$ISO3 <- countrycode(google$ISO2, origin = 'iso2c', destination = 'iso3c')
 google$country <- countrycode(google$ISO2, origin = 'iso2c', destination = 'country.name')
@@ -47,44 +50,50 @@ google$country <- countrycode(google$ISO2, origin = 'iso2c', destination = 'coun
 google$julian<- (strptime(google$date, "%Y-%m-%d")$yday) + 1 # need to add 1 day because 2020 is a leap year
 
 library(naniar)
+
 # remove the subregions and only keep the overall country pattern
 google<- google %>% replace_with_na(replace = list(sub_region_1 = ""))
 google<- google[is.na(google$sub_region_1),]
 
+library(dplyr)
+
 ## Calculate global median movement at parks, transit and residential
 google_median <- google %>% group_by(date) %>% 
-                    summarise(`Parks & Beaches`= 
-                                median(parks_percent_change_from_baseline, na.rm = TRUE),
-                              `Grocery & Pharmacy` = 
-                                median(grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),
-                              Residential = 
-                                median(residential_percent_change_from_baseline, na.rm = TRUE))
+      summarise(`Parks & Beaches`= 
+                 median(parks_percent_change_from_baseline, na.rm = TRUE),
+                `Grocery & Pharmacy` = 
+                 median(grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),
+                 Residential = 
+                 median(residential_percent_change_from_baseline, na.rm = TRUE))
 
 ## Define "date" as a date 
 google_median$date <- as.Date(google_median$date)
 
 library(tidyr)
+
 ## Rearrange for plotting
 google_median <- google_median %>% gather(type, change, `Parks & Beaches`:Residential)
 
-## Calculate country median movement at parks, transit and residential
-#google_countries <- google %>% group_by(date, country_region) %>% 
-#                    summarise(`Parks & Beaches`= median(parks_percent_change_from_baseline, na.rm = TRUE),
-#                              `Transit Stations` = median(transit_stations_percent_change_from_baseline, na.rm = TRUE),
-#                              Residential = median(residential_percent_change_from_baseline, na.rm = TRUE))
-
 
 google_countries <- google %>% select(date,country_region,ISO3, 
-                                      `Parks & Beaches`= 
-                                        parks_percent_change_from_baseline,
-                                      `Grocery & Pharmacy` = 
-                                        grocery_and_pharmacy_percent_change_from_baseline,
-                                          Residential = 
-                                        residential_percent_change_from_baseline) 
+                    `Parks & Beaches`= 
+                     parks_percent_change_from_baseline,
+                    `Grocery & Pharmacy` = 
+                     grocery_and_pharmacy_percent_change_from_baseline,
+                     Residential = 
+                     residential_percent_change_from_baseline) 
 
 
+```
 
+
+# Plotting
+
+```{r}
+# Load packages
 library(ggplot2);library(viridis); library(ggpubr);library(sf);library("rnaturalearth"); library("rnaturalearthdata")
+
+
 # extract continent info
 # data for the world
 world <- ne_countries(scale = "medium", returnclass = "sf")
@@ -93,8 +102,11 @@ region_un <- world$region_un
 continent <- world$continent
 ISO3 <- world$ISO3
 continent<- tibble(ISO3, region_un, continent)
+
+
 # join to circle data
 google_countries <- left_join(google_countries, continent, by = "ISO3")
+
 # assign Tuvalu to Oceania
 google_countries$region_un[is.na(google_countries$region_un)] <-"Oceania"
 
@@ -104,89 +116,6 @@ google_countries$date <- as.Date(google_countries$date)
 ## Rearrange for plotting
 google_countries <- google_countries %>% gather(type, change, `Parks & Beaches`:Residential)
 
-
-
-  
-ggplot(google_median, aes(date, `Parks & Beaches`)) +
-  geom_line(data = google_countries, aes(group = country_region), colour = alpha("grey", 0.5))+
-  geom_line(size = 1)+
-  geom_hline(yintercept = 0, linetype = "dashed")+
-    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
-      theme_bw(base_size = 15)+ # set the background theme                                              
-  theme(panel.grid.major = element_blank(), # remove the major lines
-        panel.grid.minor = element_blank())+ # remove the minor lines
-  labs(x = "", 
-       y = "Change in length of visit (%)",
-       title = "Parks & Beaches")
-
-ggplot(google_median, aes(date, `Grocery & Pharmacy`)) +
-  geom_line(data = google_countries, aes(group = country_region), colour = alpha("grey", 0.5))+
-  geom_line(size = 1)+
-  geom_hline(yintercept = 0, linetype = "dashed")+
-    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
-      theme_bw(base_size = 15)+ # set the background theme                                              
-  theme(panel.grid.major = element_blank(), # remove the major lines
-        panel.grid.minor = element_blank())+ # remove the minor lines
-  labs(x = "", 
-       y = "Change in length of visit (%)",
-       title = "Grocery & Pharmacy")
-
-ggplot(google_median, aes(date, Residential)) +
-  geom_line(data = google_countries, aes(group = country_region), colour = alpha("grey", 0.5))+
-  geom_line(size = 1)+
-  geom_hline(yintercept = 0, linetype = "dashed")+
-    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
-      theme_bw(base_size = 15)+ # set the background theme                                              
-  theme(panel.grid.major = element_blank(), # remove the major lines
-        panel.grid.minor = element_blank())+ # remove the minor lines
-  labs(x = "", 
-       y = "Change in length of visit (%)",
-       title = "Residential")
-
-
-
-ggplot() +
-  geom_line(data = google_countries, aes(date, `Parks & Beaches`, group = country_region), colour = alpha("grey", 0.5))+
-  geom_line(size = 1)+
-  geom_hline(yintercept = 0, linetype = "dashed")+
-    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
-      theme_bw(base_size = 15)+ # set the background theme                                              
-  theme(panel.grid.major = element_blank(), # remove the major lines
-        panel.grid.minor = element_blank())+ # remove the minor lines
-  facet_wrap(~region_un, scales = "free", ncol = 3)+
-  labs(x = "", 
-       y = "Change in length of visit (%)",
-       title = "Parks & Beaches")+
-  theme(axis.text.x = element_text(angle = 90))
-
-
-ggplot() +
-  geom_line(data = google_countries, aes(date, `Grocery & Pharmacy`, group = country_region), colour = alpha("grey", 0.5))+
-  geom_line(size = 1)+
-  geom_hline(yintercept = 0, linetype = "dashed")+
-    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
-      theme_bw(base_size = 15)+ # set the background theme                                              
-  theme(panel.grid.major = element_blank(), # remove the major lines
-        panel.grid.minor = element_blank())+ # remove the minor lines
-  facet_wrap(~region_un, scales = "free", ncol = 3)+
-  labs(x = "", 
-       y = "Change in length of visit (%)",
-       title = "Grocery & Pharmacy")+
-  theme(axis.text.x = element_text(angle = 90))
-
-ggplot() +
-  geom_line(data = google_countries, aes(date, Residential, group = country_region), colour = alpha("grey", 0.5))+
-  geom_line(size = 1)+
-  geom_hline(yintercept = 0, linetype = "dashed")+
-    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
-      theme_bw(base_size = 15)+ # set the background theme                                              
-  theme(panel.grid.major = element_blank(), # remove the major lines
-        panel.grid.minor = element_blank())+ # remove the minor lines
-  facet_wrap(~region_un, scales = "free", ncol = 3)+
-  labs(x = "", 
-       y = "Change in length of visit (%)",
-       title = "Residential")+
-  theme(axis.text.x = element_text(angle = 90))
 
 
 ggplot(google_median, aes(date, change)) +
@@ -203,14 +132,124 @@ ggplot(google_median, aes(date, change)) +
     theme(strip.text.x = element_text(size = 15, color = "white"), 
           strip.background = element_rect(fill="black"))
 
+
+# Save the plot
 ggsave("Parks_grocety_residential.pdf", 
        dpi = 600, 
        width = 160, height = 200, unit = "mm")
 
-      # subtitle = "Black line = median across 135 countries. Grey lines = countries.")
-
-
 ```
 
+
+## Other plots
+
+```{r}
+
+## Calculate country median movement at parks, transit and residential
+google_countries2 <- google %>% group_by(date, country_region) %>% 
+                    summarise(`Parks & Beaches`= 
+                                median(parks_percent_change_from_baseline, na.rm = TRUE),
+                              `Transit Stations` =
+                                median(transit_stations_percent_change_from_baseline, na.rm = TRUE),
+                               Residential = 
+                                median(residential_percent_change_from_baseline, na.rm = TRUE))
+
+  
+ggplot(google_median, aes(date, `Parks & Beaches`)) +
+  geom_line(data = google_countries, aes(group = country_region), colour = alpha("grey", 0.5))+
+  geom_line(size = 1)+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
+      theme_bw(base_size = 15)+ # set the background theme                                              
+  theme(panel.grid.major = element_blank(), # remove the major lines
+        panel.grid.minor = element_blank())+ # remove the minor lines
+  labs(x = "", 
+       y = "Change in length of visit (%)",
+       title = "Parks & Beaches")
+
+
+ggplot(google_median, aes(date, `Grocery & Pharmacy`)) +
+  geom_line(data = google_countries, aes(group = country_region), colour = alpha("grey", 0.5))+
+  geom_line(size = 1)+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
+      theme_bw(base_size = 15)+ # set the background theme                                            
+  theme(panel.grid.major = element_blank(), # remove the major lines
+        panel.grid.minor = element_blank())+ # remove the minor lines
+  labs(x = "", 
+       y = "Change in length of visit (%)",
+       title = "Grocery & Pharmacy")
+
+
+ggplot(google_median, aes(date, Residential)) +
+  geom_line(data = google_countries, aes(group = country_region), colour = alpha("grey", 0.5))+
+  geom_line(size = 1)+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
+      theme_bw(base_size = 15)+ # set the background theme                                            
+  theme(panel.grid.major = element_blank(), # remove the major lines
+        panel.grid.minor = element_blank())+ # remove the minor lines
+  labs(x = "", 
+       y = "Change in length of visit (%)",
+       title = "Residential")
+
+
+
+## Explore the regional trends
+
+# Parks and Beaches
+ggplot() +
+  geom_line(data = filter(google_countries, type == "Parks & Beaches"),
+            aes(date, change, group = country_region),
+            colour = alpha("grey", 0.5))+
+  geom_line(size = 1)+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
+      theme_bw(base_size = 15)+ # set the background theme                                            
+  theme(panel.grid.major = element_blank(), # remove the major lines
+        panel.grid.minor = element_blank())+ # remove the minor lines
+  facet_wrap(~region_un, scales = "free", ncol = 3)+
+  labs(x = "", 
+       y = "Change in length of visit (%)",
+       title = "Parks & Beaches")+
+  theme(axis.text.x = element_text(angle = 90))
+
+
+# Grocery & Pharmacy
+ggplot() +
+  geom_line(data = filter(google_countries, type == "Grocery & Pharmacy"),
+            aes(date, change, group = country_region),
+            colour = alpha("grey", 0.5))+
+  geom_line(size = 1)+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
+      theme_bw(base_size = 15)+ # set the background theme                                            
+  theme(panel.grid.major = element_blank(), # remove the major lines
+        panel.grid.minor = element_blank())+ # remove the minor lines
+  facet_wrap(~region_un, scales = "free", ncol = 3)+
+  labs(x = "", 
+       y = "Change in length of visit (%)",
+       title = "Grocery & Pharmacy")+
+  theme(axis.text.x = element_text(angle = 90))
+
+
+# Residential
+ggplot() +
+  geom_line(data = filter(google_countries, type == "Residential"),
+            aes(date, change, group = country_region),
+            colour = alpha("grey", 0.5))+
+  geom_line(size = 1)+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+    scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
+      theme_bw(base_size = 15)+ # set the background theme                                            
+  theme(panel.grid.major = element_blank(), # remove the major lines
+        panel.grid.minor = element_blank())+ # remove the minor lines
+  facet_wrap(~region_un, scales = "free", ncol = 3)+
+  labs(x = "", 
+       y = "Change in length of visit (%)",
+       title = "Residential")+
+  theme(axis.text.x = element_text(angle = 90))
+
+```
 
 
