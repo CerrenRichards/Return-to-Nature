@@ -40,7 +40,7 @@ In this chunk we download the Google mobility data, reorganise it and select onl
 ```{r, error=FALSE, warning=FALSE}
 
 # These data were downloaded in October 2020
-google <- read.csv("Global_Mobility_Report.csv")
+google <- readRDS(file = "Global_Mobility_Report.rds")
 
 # R reads Namibia's iso2 code is as an "is.na" object, so we will rename it to NA
 google$country_region_code[is.na(google$country_region_code)] <-"NA"
@@ -61,6 +61,7 @@ library(naniar)
 google <- google %>% replace_with_na(replace = list(sub_region_1 = ""))
 google <- google[is.na(google$sub_region_1),]
 
+library(dplyr)
 
 # Select the specific data and rename columns
 google_countries <- google %>% select(date,country_region,ISO3, 
@@ -81,7 +82,7 @@ Here we extract the continent and regional information for each of the countries
 
 ```{r}
 # Load packages
-library(ggplot2);library(viridis); library(ggpubr);library(sf);library("rnaturalearth"); library("rnaturalearthdata")
+library(ggplot2);library(viridis); library(ggpubr);library(sf);library("rnaturalearth"); library("rnaturalearthdata"); library(tidyr)
 
 
 # extract continent info
@@ -107,6 +108,11 @@ google_countries$date <- as.Date(google_countries$date)
 google_countries <- google_countries %>% gather(type, change, `Parks & Beaches`:Residential)
 
 
+## Calculate regional median movement at parks, pharmacies and residential
+google_median_regional <- google_countries %>% group_by(date, type, region_un) %>% 
+      summarise(change = median(change, na.rm = TRUE))
+
+
 ## Create plot theme
 regional_plottheme <-  theme_bw(base_size = 15)+ # set the background theme   
    theme(panel.grid.major = element_blank(), # remove the major lines
@@ -123,6 +129,8 @@ ggplot() +
   geom_line(data = filter(google_countries, type == "Parks & Beaches"),
             aes(date, change, group = country_region),
             colour = alpha("grey", 0.5))+
+  geom_line(data = filter(google_median_regional, type == "Parks & Beaches"),
+            aes(date, change))+
   geom_hline(yintercept = 0, linetype = "dashed")+
   scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
   facet_wrap(~region_un, scales = "free", ncol = 3)+
@@ -137,6 +145,8 @@ ggplot() +
   geom_line(data = filter(google_countries, type == "Grocery & Pharmacy"),
             aes(date, change, group = country_region),
             colour = alpha("grey", 0.5))+
+    geom_line(data = filter(google_median_regional, type == "Grocery & Pharmacy"),
+            aes(date, change))+
   geom_hline(yintercept = 0, linetype = "dashed")+
   scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
   facet_wrap(~region_un, scales = "free", ncol = 3)+
@@ -150,6 +160,8 @@ ggplot() +
   geom_line(data = filter(google_countries, type == "Residential"),
             aes(date, change, group = country_region),
             colour = alpha("grey", 0.5))+
+  geom_line(data = filter(google_median_regional, type == "Residential"),
+            aes(date, change))+
   geom_hline(yintercept = 0, linetype = "dashed")+
   scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
   facet_wrap(~region_un, scales = "free", ncol = 3)+
@@ -197,15 +209,18 @@ ggplot(google_median, aes(date, change)) +
   geom_line(data = google_countries, 
             aes(group = country_region), 
             colour = alpha("grey", 0.5))+
+  geom_line(size = 1)+
+  geom_vline(xintercept = as.numeric(as.Date("2020-07-28")), 
+             linetype = "dashed", colour = "red", size = 1)+
   geom_hline(yintercept = 0, linetype = "dashed")+
   scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
-  facet_wrap(~type, scales = "free", nrow = 3)+
+  facet_wrap(~type, scales = "free", nrow = 2)+
   labs(y = "Change in length of visit (%)")+
   global_plottheme
 
 
 # Save the plot
-ggsave("Parks_grocety_residential.pdf", 
+ggsave("Parks_grocery_residential.pdf", 
        dpi = 600, 
        width = 160, height = 200, unit = "mm")
 ```
