@@ -117,7 +117,7 @@ google_median_regional <- google_countries %>% group_by(date, type, region_un) %
 regional_plottheme <-  theme_bw(base_size = 15)+ # set the background theme   
    theme(panel.grid.major = element_blank(), # remove the major lines
         panel.grid.minor = element_blank(), # remove the minor lines
-        axis.text.x = element_text(angle = 90), # rotate the x-axis text
+        #axis.text.x = element_text(angle = 90), # rotate the x-axis text
         axis.title.x = element_blank(),
         strip.text.x = element_text(size = 15, color = "white"), 
         strip.background = element_rect(fill="black")) # remove x-axis title
@@ -132,7 +132,7 @@ ggplot() +
   geom_line(data = filter(google_median_regional, type == "Parks & Beaches"),
             aes(date, change))+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
+  scale_x_date(date_breaks = "8 week", date_labels = "%b %d")+
   facet_wrap(~region_un, scales = "free", ncol = 3)+
   labs(y = "Change in length of visit (%)",
        title = "Parks & Beaches")+
@@ -148,7 +148,7 @@ ggplot() +
     geom_line(data = filter(google_median_regional, type == "Grocery & Pharmacy"),
             aes(date, change))+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
+  scale_x_date(date_breaks = "8 week", date_labels = "%b %d")+
   facet_wrap(~region_un, scales = "free", ncol = 3)+
   labs(y = "Change in length of visit (%)",
        title = "Grocery & Pharmacy")+
@@ -163,7 +163,7 @@ ggplot() +
   geom_line(data = filter(google_median_regional, type == "Residential"),
             aes(date, change))+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
+  scale_x_date(date_breaks = "8 week", date_labels = "%b %d")+
   facet_wrap(~region_un, scales = "free", ncol = 3)+
   labs(y = "Change in length of visit (%)",
        title = "Residential")+
@@ -213,7 +213,7 @@ ggplot(google_median, aes(date, change)) +
   geom_vline(xintercept = as.numeric(as.Date("2020-07-28")), 
              linetype = "dashed", colour = "red", size = 1)+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  scale_x_date(date_breaks = "4 week", date_labels = "%b %d")+
+  scale_x_date(date_breaks = "8 week", date_labels = "%b %d")+
   facet_wrap(~type, scales = "free", nrow = 2)+
   labs(y = "Change in length of visit (%)")+
   global_plottheme
