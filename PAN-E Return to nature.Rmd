@@ -70,7 +70,9 @@ google_countries <- google %>% select(date,country_region,ISO3,
                     `Grocery & Pharmacy` = 
                      grocery_and_pharmacy_percent_change_from_baseline,
                      Residential = 
-                     residential_percent_change_from_baseline) 
+                     residential_percent_change_from_baseline,
+                    `Retail & Recreation` = 
+                      retail_and_recreation_percent_change_from_baseline) 
 
 ```
 
@@ -105,7 +107,8 @@ google_countries$region_un[is.na(google_countries$region_un)] <-"Oceania"
 google_countries$date <- as.Date(google_countries$date)
 
 ## Rearrange for plotting
-google_countries <- google_countries %>% gather(type, change, `Parks & Beaches`:Residential)
+google_countries <- google_countries %>% gather(type, change, 
+                                                `Parks & Beaches`:`Retail & Recreation`)
 
 
 ## Calculate regional median movement at parks, pharmacies and residential
@@ -176,6 +179,8 @@ ggplot() +
 
 Here we calculate and plot the global median change of time at parks, pharmacies and residential during lockdown.
 
+At the global scale, people returned to nature five days before (parks & beaches: 19-08-2020) they returned to get basic human needs (grocery & pharmacy: 24-08-2020), and 15 days before they returned to retail and recreation stores (03-09-2020). Date represents the day that the global median crossed zero.
+
 ```{r}
 
 library(dplyr); library(tidyr)
@@ -187,13 +192,15 @@ google_median <- google %>% group_by(date) %>%
                 `Grocery & Pharmacy` = 
                  median(grocery_and_pharmacy_percent_change_from_baseline, na.rm = TRUE),
                  Residential = 
-                 median(residential_percent_change_from_baseline, na.rm = TRUE))
+                 median(residential_percent_change_from_baseline, na.rm = TRUE),
+                `Retail & Recreation` = 
+                  median(retail_and_recreation_percent_change_from_baseline, na.rm = TRUE))
 
 ## Define "date" as a date 
 google_median$date <- as.Date(google_median$date)
 
 ## Rearrange for plotting
-google_median <- google_median %>% gather(type, change, `Parks & Beaches`:Residential)
+google_median <- google_median %>% gather(type, change, `Parks & Beaches`:`Retail & Recreation`)
 
 ## Define plot theme
 global_plottheme <- theme_bw(base_size = 15)+ # set the background theme       
