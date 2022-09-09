@@ -32,6 +32,9 @@ Here we use the Google mobility data to explore the response of people returning
 
 #_______________________
 
+#######################
+## SIMPLIFIED METHODS
+#######################
 
 ## Download the Google mobility data
 
@@ -230,6 +233,45 @@ ggplot(google_median, aes(date, change)) +
 ggsave("Parks_grocery_residential.pdf", 
        dpi = 600, 
        width = 160, height = 200, unit = "mm")
+```
+
+
+#######################
+## ADVANCED METHODS
+#######################
+
+1. Use GAM models to identify the anthropause date for each country based on the greatest change of people being confined to their homes (same approach as BIOC paper)
+
+2. Find the date that each country's mobility crosses zero (e.g., "returns" to nature, necessities, luxuries)
+
+3. Calculate the number of days between the lockdown date and the return date for each country
+
+4. Calculate the average global and continental return days for nature, necessities, luxuries
+
+5. Compare whether there is a global and continental difference between the return days to nature, necessities, luxuries
+
+## Date countries cross zero
+
+```{r}
+
+## Join the lockdown date to the google data
+google2 <- left_join(google, 
+                     chosen_start %>% select(country, ISO3, julian_lockdown))
+
+
+## Identify the day that a country's mobility crosses zero
+## and calculate the number of days after lockdown that the 
+## country's mobility crossed zero
+google2 %>% group_by(country, ISO3) %>% 
+            filter(julian > julian_lockdown & parks > 0) %>%
+            summarise(lockdown = min(julian_lockdown),
+                      parks_zero = min(julian),
+                      parks_diff = parks_zero - lockdown)
+
+
+
+
+
 ```
 
 
