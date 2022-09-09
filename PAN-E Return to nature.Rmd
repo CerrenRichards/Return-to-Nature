@@ -67,7 +67,7 @@ google <- google[is.na(google$sub_region_1),]
 library(dplyr)
 
 # Select the specific data and rename columns
-google_countries <- google %>% select(date,country_region,ISO3, 
+google_countries <- google %>% select(country, ISO3, date,  julian,
                     `Parks & Beaches`= 
                      parks_percent_change_from_baseline,
                     `Grocery & Pharmacy` = 
@@ -249,6 +249,369 @@ ggsave("Parks_grocery_residential.pdf",
 4. Calculate the average global and continental return days for nature, necessities, luxuries
 
 5. Compare whether there is a global and continental difference between the return days to nature, necessities, luxuries
+
+
+## Download the Google mobility data
+
+In this chunk we download the Google mobility data, reorganise it and select only the overall country trends. 
+
+```{r, error=FALSE, warning=FALSE}
+
+# These data were downloaded in October 2020
+google <- readRDS(file = "Global_Mobility_Report.rds")
+
+# R reads Namibia's iso2 code is as an "is.na" object, so we will rename it to NA
+google$country_region_code[is.na(google$country_region_code)] <-"NA"
+
+library(countrycode)
+
+# Add the country codes so we ensure everything matches 
+google$ISO2 <- google$country_region_code
+google$ISO3 <- countrycode(google$ISO2, origin = 'iso2c', destination = 'iso3c')
+google$country <- countrycode(google$ISO2, origin = 'iso2c', destination = 'country.name')
+
+# Add Julian date
+google$julian<- (strptime(google$date, "%Y-%m-%d")$yday) + 1 # need to add 1 day because 2020 is a leap year
+
+library(naniar)
+
+# remove the subregions and only keep the overall country pattern
+google <- google %>% replace_with_na(replace = list(sub_region_1 = ""))
+google <- google[is.na(google$sub_region_1),]
+
+library(dplyr)
+
+# Select the specific data and rename columns
+google_countries <- google %>% select(country, ISO3, date,  julian,
+                    `Parks & Beaches`= 
+                     parks_percent_change_from_baseline,
+                    `Grocery & Pharmacy` = 
+                     grocery_and_pharmacy_percent_change_from_baseline,
+                     Residential = 
+                     residential_percent_change_from_baseline,
+                    `Retail & Recreation` = 
+                      retail_and_recreation_percent_change_from_baseline) 
+
+```
+
+
+### COVID-19 Confinement Data
+
+The Oxford Covid-19 Government Response Tracker (OxCGRT) has compiled dates for eight different confinement types and their severity (0-4).
+
+Data info: https://github.com/OxCGRT/covid-policy-tracker
+
+The data are constantly being updated, therefore the link may change in the future.
+
+```{r, eval=FALSE}
+library(RCurl)
+
+# Call the OxCGRT data from GitHub
+confinement <- getURL("https://raw.githubusercontent.com/OxCGRT/covid-policy-tracker-legacy/main/legacy_data_202207/OxCGRT_latest.csv")
+
+
+# Set up the confinement data for further analyses
+conf <- read.csv(text=confinement) %>% 
+  mutate(julian=(strptime(Date, "%Y%m%d")$yday)+1) %>% # assign Julian Date
+  mutate(Date=as.Date(strptime(Date, "%Y%m%d"))) %>% # Set as a date 
+  mutate(weekday=weekdays(Date)) %>% # Identify weekdays
+  mutate(weekend=ifelse(grepl("Sat|Sun", weekday), 1,0)) %>% # Assign columns for weekends
+  select(ISO3=CountryCode, RegionName, Date, julian, weekday, weekend, # Select columns
+         C1_School.closing, C2_Workplace.closing, C3_Cancel.public.events,
+         C4_Restrictions.on.gatherings, C5_Close.public.transport,
+         C6_Stay.at.home.requirements, C7_Restrictions.on.internal.movement) %>%
+  filter(Date <="2020-09-11")
+
+# Remove subregions
+conf<- conf %>% replace_with_na(replace = list(RegionName = ""))
+conf<- conf[is.na(conf$RegionName),]
+
+```
+
+
+### SENSITIVITY ANALYSIS and Extract t-statistic for each country
+
+We divided each country’s mobility data into ‘before’ and ‘after’ periods for each confinement type and level, ran generalised additive models to determine which division best characterised the observed changes in mobility patterns. 
+
+```{r, eval = FALSE}
+
+# Sensitivity analysis to identify the best cut off dates
+# We select May because this is when most countries begin to ease the restrictions
+maystart <- 122 # Julian date for May 1st
+maymid <- 136 # May 15
+mayend <- 152 # May 30
+
+# Subset the google data
+googlestart <- subset(google_countries,  julian <= maystart)
+googlemid <- subset(google_countries,  julian <= maymid)
+googleend <- subset(google_countries,  julian <= mayend)
+
+# Join the Google data with the confinement data
+googlestart <- left_join(googlestart, conf, by = c("ISO3", "julian"))
+googlemid <- left_join(googlemid, conf, by = c("ISO3", "julian"))
+googleend <- left_join(googleend, conf, by = c("ISO3", "julian"))
+
+
+# List seven of the confinement types 
+conftypes=c("C1_School.closing", "C2_Workplace.closing", "C3_Cancel.public.events",
+            "C4_Restrictions.on.gatherings", "C5_Close.public.transport",
+            "C6_Stay.at.home.requirements", "C7_Restrictions.on.internal.movement")
+
+###_________________________________________
+### MID MAY
+###_________________________________________
+
+# Create empty spaces for results to be pasted
+country=ISO3=restriction=level=date=character() # set as character
+aics=R2=t.lockdown=pval=numeric() # set as numeric
+
+# Create empty dataframes and lists for model outputs
+country.results=subdat.list=chosen_mid=data.frame()
+mod.list=country.results=list()
+
+library(mgcv)
+library(lubridate)
+
+# Run loop to extract the t-statistic
+for(i in unique(googlemid$country)){
+  for(j in conftypes){
+    subdat=subset(googlemid, country==i)  
+    locklevels=unique(subdat[[j]])
+    locklevels=locklevels[which(locklevels %in% c(1:10))]
+    for(k in locklevels){
+      subdat$lockdown=(subdat[[j]]==k)*1
+      subdat$lockdown.type=j
+      subdat$level=k
+      mod=try(gam(Residential ~ lockdown + weekend + s(julian), data=subdat))
+      if(!class(mod)[1]=="try-error"){
+        country=c(country,i)
+        ISO3=c(ISO3, subdat$ISO3[1])
+        restriction=c(restriction,j)
+        level=c(level,k)
+        aics=c(aics,AIC(mod))
+        R2=c(R2, summary(mod)$r.sq)
+        t.lockdown=c(t.lockdown, summary(mod)$p.table["lockdown","t value"])
+        pval=c(pval, summary(mod)$p.table["lockdown","Pr(>|t|)"])
+        date=c(date, subdat$date[min(which(subdat$lockdown==1))])
+      
+
+        # save models and subdata
+        mod.list[[paste(i,j,k, sep="_")]]=mod
+        subdat.list=rbind(subdat.list, subset(subdat, 
+                                              select=c("country", "date", "julian", "weekday",
+                                                       "lockdown.type","level",  "Residential",
+                                                        "lockdown")))
+        
+      }
+    }
+  }
+  
+  # select country top model
+  country.out=data.frame(country, ISO3, restriction, level, aics, R2, t.lockdown, pval, date) %>%
+    mutate(Date=ymd(date)) %>%
+    subset(country==i) %>% 
+    arrange(aics)
+  
+  country.results=rbind(country.results,country.out)
+  
+  country.out=subset(country.out, t.lockdown==max(t.lockdown))
+  country.out$model = with(country.out, paste(country, restriction, level, sep="_"))
+  
+  # add top model outputs to list
+  chosen_mid=rbind(chosen_mid,country.out)
+  
+  print(paste(i))
+}
+
+# Assign Julian date for the confinement date
+chosen_mid$julian_lockdown <- (strptime(chosen_mid$date, "%Y-%m-%d")$yday) + 1 
+
+chosen_mid<- distinct(chosen_mid, country, .keep_all = TRUE)
+
+# Find median AIC score for all countries
+median(chosen_mid$aics) #447
+
+###_________________________________________
+### END MAY
+###_________________________________________
+
+
+# Create empty spaces for results to be pasted
+country=ISO3=restriction=level=date=character() # set as character
+aics=R2=t.lockdown=pval=numeric() # set as numeric
+
+# Create empty dataframes and lists for model outputs
+country.results=subdat.list=chosen_end=data.frame()
+mod.list=country.results=list()
+
+
+# Run loop to extract the t-statistic
+for(i in unique(googleend$country)){
+  for(j in conftypes){
+    subdat=subset(googleend, country==i)  
+    locklevels=unique(subdat[[j]])
+    locklevels=locklevels[which(locklevels %in% c(1:10))]
+    for(k in locklevels){
+      subdat$lockdown=(subdat[[j]]==k)*1
+      subdat$lockdown.type=j
+      subdat$level=k
+      mod=try(gam(residential ~ lockdown + weekend + s(julian), data=subdat))
+      if(!class(mod)[1]=="try-error"){
+        country=c(country,i)
+        ISO3=c(ISO3, subdat$ISO3[1])
+        restriction=c(restriction,j)
+        level=c(level,k)
+        aics=c(aics,AIC(mod))
+        R2=c(R2, summary(mod)$r.sq)
+        t.lockdown=c(t.lockdown, summary(mod)$p.table["lockdown","t value"])
+        pval=c(pval, summary(mod)$p.table["lockdown","Pr(>|t|)"])
+        date=c(date, subdat$date[min(which(subdat$lockdown==1))])
+      
+
+        # save models and subdata
+        mod.list[[paste(i,j,k, sep="_")]]=mod
+        subdat.list=rbind(subdat.list, subset(subdat, 
+                                              select=c("country", "date", "julian", "weekday",
+                                                       "lockdown.type","level",  "residential",
+                                                        "lockdown")))
+        
+      }
+    }
+  }
+  
+  # select country top model
+  country.out=data.frame(country, ISO3, restriction, level, aics, R2, t.lockdown, pval, date) %>%
+    mutate(Date=ymd(date)) %>%
+    subset(country==i) %>% 
+    arrange(aics)
+  
+  country.results=rbind(country.results,country.out)
+  
+  country.out=subset(country.out, t.lockdown==max(t.lockdown))
+  country.out$model = with(country.out, paste(country, restriction, level, sep="_"))
+  
+  # add top model outputs to list
+  chosen_end=rbind(chosen_end,country.out)
+  
+  print(paste(i))
+}
+
+# Assign Julian date for the confinement date
+chosen_end$julian_lockdown <- (strptime(chosen_end$date, "%Y-%m-%d")$yday) + 1 
+
+
+chosen_end<- distinct(chosen_end, country, .keep_all = TRUE)
+
+# Find median AIC score for all countries
+median(chosen_end$aics) #525
+
+
+###_________________________________________
+### START MAY
+###_________________________________________
+
+# Create empty spaces for results to be pasted
+country=ISO3=restriction=level=date=character() # set as character
+aics=R2=t.lockdown=pval=numeric() # set as numeric
+
+# Create empty dataframes and lists for model outputs
+country.results=subdat.list=chosen_start=data.frame()
+mod.list=country.results=list()
+
+# Run loop to extract the t-statistic
+for(i in unique(googlestart$country)){
+  for(j in conftypes){
+    subdat=subset(googlestart, country==i)  
+    locklevels=unique(subdat[[j]])
+    locklevels=locklevels[which(locklevels %in% c(1:10))]
+    for(k in locklevels){
+      subdat$lockdown=(subdat[[j]]==k)*1
+      subdat$lockdown.type=j
+      subdat$level=k
+      mod=try(gam(Residential ~ lockdown + weekend + s(julian), data=subdat))
+      if(!class(mod)[1]=="try-error"){
+        country=c(country,i)
+        ISO3=c(ISO3, subdat$ISO3[1])
+        restriction=c(restriction,j)
+        level=c(level,k)
+        aics=c(aics,AIC(mod))
+        R2=c(R2, summary(mod)$r.sq)
+        t.lockdown=c(t.lockdown, summary(mod)$p.table["lockdown","t value"])
+        pval=c(pval, summary(mod)$p.table["lockdown","Pr(>|t|)"])
+        date=c(date, subdat$date[min(which(subdat$lockdown==1))])
+      
+
+        # save models and subdata
+        mod.list[[paste(i,j,k, sep="_")]]=mod
+        subdat.list=rbind(subdat.list, subset(subdat, 
+                                              select=c("country", "date", "julian", "weekday",
+                                                       "lockdown.type","level",  "Residential",
+                                                        "lockdown")))
+        
+      }
+    }
+  }
+  
+  # select country top model
+  country.out=data.frame(country, ISO3, restriction, level, aics, R2, t.lockdown, pval, date) %>%
+    mutate(date=ymd(date)) %>%
+    subset(country==i) %>% 
+    arrange(aics)
+  
+  country.results=rbind(country.results,country.out)
+  
+  country.out=subset(country.out, t.lockdown==max(t.lockdown))
+  country.out$model = with(country.out, paste(country, restriction, level, sep="_"))
+  
+  # add top model outputs to list
+  chosen_start=rbind(chosen_start,country.out)
+  
+  print(paste(i))
+}
+
+# Assign Julian date for the confinement date
+chosen_start$julian_lockdown <- (strptime(chosen_start$date, "%Y-%m-%d")$yday) + 1 
+
+# Remove duplicated countries (that have the same AIC score for multiple confinement types)
+chosen_start<- distinct(chosen_start, country, .keep_all = TRUE)
+
+# Find median AIC score for all countries
+median(chosen_start$aics) #379
+
+
+```
+
+
+
+# Add the continental info to the google data
+
+```{r}
+# Load packages
+library(ggplot2);library(viridis); library(ggpubr);library(sf);library("rnaturalearth"); library("rnaturalearthdata"); library(tidyr)
+
+
+# extract continent info
+# These data will be used to match the world regions to the google data
+world <- ne_countries(scale = "medium", returnclass = "sf")
+world <- world %>% rename(ISO3 = iso_a3) 
+region_un <- world$region_un
+continent <- world$continent
+ISO3 <- world$ISO3
+continent<- tibble(ISO3, region_un, continent)
+
+
+# join the regional data to the google data
+google_countries <- left_join(google_countries, continent, by = "ISO3")
+
+# assign Tuvalu to Oceania
+google_countries$region_un[is.na(google_countries$region_un)] <-"Oceania"
+
+## Define "date" as a date 
+google_countries$date <- as.Date(google_countries$date)
+
+```
+
+
 
 ## Date countries cross zero
 
