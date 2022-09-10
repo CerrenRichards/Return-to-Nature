@@ -22,6 +22,8 @@ Here we use the Google mobility data to explore the response of people returning
     - Residential: places of residence
     - Grocery & Pharmacy: grocery markets, food warehouses, farmers markets, 
                           specialty food shops, drug stores, and pharmacies.
+    - Retail & Recreation:restaurants, cafes, shopping centers, theme parks,
+                          museums, libraries, and movie theaters
     
 * Baseline: Median value, for the corresponding day of the week, during the 5- week period Jan 3–Feb 6, 2020
 
@@ -29,6 +31,8 @@ Here we use the Google mobility data to explore the response of people returning
 
 * https://www.google.com/covid19/mobility/
 * https://support.google.com/covid19-mobility/answer/9824897?hl=en&ref_topic=9822927
+* https://www.google.com/covid19/mobility/data_documentation.html?hl=en
+
 
 #_______________________
 
@@ -260,6 +264,13 @@ In this chunk we download the Google mobility data, reorganise it and select onl
 # These data were downloaded in October 2020
 google <- readRDS(file = "Global_Mobility_Report.rds")
 
+# These data were downloaded in September 2022
+google <- read.csv("Global_Mobility_Report_latest.csv")
+
+# Filter for only 2020 data
+google$date2 <- as.Date(google$date)
+google <- google %>% filter(date2 <= "2020-12-31")
+
 # R reads Namibia's iso2 code is as an "is.na" object, so we will rename it to NA
 google$country_region_code[is.na(google$country_region_code)] <-"NA"
 
@@ -275,9 +286,8 @@ google$julian<- (strptime(google$date, "%Y-%m-%d")$yday) + 1 # need to add 1 day
 
 library(naniar)
 
-# remove the subregions and only keep the overall country pattern
-google <- google %>% replace_with_na(replace = list(sub_region_1 = ""))
-google <- google[is.na(google$sub_region_1),]
+# remove the subregions and metro areas and only keep the overall country pattern
+google <- google %>% filter(metro_area == "" & sub_region_1 == "")
 
 library(dplyr)
 
@@ -429,7 +439,7 @@ chosen_mid$julian_lockdown <- (strptime(chosen_mid$date, "%Y-%m-%d")$yday) + 1
 chosen_mid<- distinct(chosen_mid, country, .keep_all = TRUE)
 
 # Find median AIC score for all countries
-median(chosen_mid$aics) #447
+median(chosen_mid$aics) #466
 
 ###_________________________________________
 ### END MAY
@@ -455,7 +465,7 @@ for(i in unique(googleend$country)){
       subdat$lockdown=(subdat[[j]]==k)*1
       subdat$lockdown.type=j
       subdat$level=k
-      mod=try(gam(residential ~ lockdown + weekend + s(julian), data=subdat))
+      mod=try(gam(Residential ~ lockdown + weekend + s(julian), data=subdat))
       if(!class(mod)[1]=="try-error"){
         country=c(country,i)
         ISO3=c(ISO3, subdat$ISO3[1])
@@ -472,7 +482,7 @@ for(i in unique(googleend$country)){
         mod.list[[paste(i,j,k, sep="_")]]=mod
         subdat.list=rbind(subdat.list, subset(subdat, 
                                               select=c("country", "date", "julian", "weekday",
-                                                       "lockdown.type","level",  "residential",
+                                                       "lockdown.type","level",  "Residential",
                                                         "lockdown")))
         
       }
@@ -503,7 +513,7 @@ chosen_end$julian_lockdown <- (strptime(chosen_end$date, "%Y-%m-%d")$yday) + 1
 chosen_end<- distinct(chosen_end, country, .keep_all = TRUE)
 
 # Find median AIC score for all countries
-median(chosen_end$aics) #525
+median(chosen_end$aics) #543
 
 
 ###_________________________________________
@@ -576,10 +586,42 @@ chosen_start$julian_lockdown <- (strptime(chosen_start$date, "%Y-%m-%d")$yday) +
 chosen_start<- distinct(chosen_start, country, .keep_all = TRUE)
 
 # Find median AIC score for all countries
-median(chosen_start$aics) #379
+median(chosen_start$aics) #393
 
 
 ```
+
+
+
+### Plot the individual country trends with lockdown date
+
+```{r, eval = FALSE}
+
+# Join the lockdown dates to the full Google data for plotting
+googleplots <- left_join(googlestart, chosen_start, by = c("country", "ISO3"))
+
+library(ggplot2)
+library(ggforce)
+## PLOT
+ggplot(data = googleplots, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)+
+  geom_vline(aes(xintercept = julian_lockdown), colour = "red")
+
+ggplot(data = googleplots, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 2)+
+  geom_vline(aes(xintercept = julian_lockdown), colour = "red")
+
+ggplot(data = googleplots, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 3)+
+  geom_vline(aes(xintercept = julian_lockdown), colour = "red")
+
+
+```
+
+
 
 
 
@@ -639,4 +681,20 @@ google2 %>% group_by(country, ISO3) %>%
 
 
 
+# Exploring changepoint
+
+```{r}
+
+cameroon <- google_countries %>% filter(country == "Cameroon")
+brazil <- google_countries %>% filter(country == "Brazil")
+estonia <- google_countries %>% filter(country == "Estonia" & julian < 122) 
+
+library(changepoint)
+cpt1 <- cpts(cpt.meanvar(estonia$Residential, method = "BinSeg", Q=1))
+
+ggplot(data = estonia, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  geom_vline(aes(xintercept = 75), colour = "red")
+
+```
 
