@@ -588,6 +588,10 @@ chosen_start<- distinct(chosen_start, country, .keep_all = TRUE)
 median(chosen_start$aics) #379
 
 
+# The start of May is the most effective at identifying the lockdown dates
+# Therefore we will use these dates for further analysis
+lockdown <- chosen_start %>% select(country, ISO3, julian_lockdown)
+
 ```
 
 
@@ -639,7 +643,7 @@ google_countries <- google_countries %>%
                                             "Guinea-Bissau"))
 
 # Remove countries from lockdown dates dataframe
-chosen_start <- chosen_start %>% 
+lockdown <- lockdown %>% 
                      filter(!country %in% c("Hong Kong SAR China", "Mongolia", 
                                             "South Korea", "Taiwan", "Yemen", 
                                             "Liechtenstein", "Réunion", "North Macedonia", 
@@ -657,13 +661,14 @@ The models above did not select appropriate dates. We therefore manually select 
 
 
 ```{r}
+
 # Subset the countries that the model did not select an appropriate confinement date
 
 # Set Julian date
 country.results$julian_lockdown <- (strptime(country.results$date, "%Y-%m-%d")$yday) + 1 
 
 ## Bahrain_C2_Workplace.closing_2 = Julian day = 78
-ggplot(data = filter(subdat.list, country == "Bahrain"), aes(x=julian, y=residential)) + 
+ggplot(data = filter(subdat.list, country == "Bahrain"), aes(x=julian, y=Residential)) + 
   geom_line() + 
   geom_vline(aes(xintercept=julian_lockdown, colour=restriction), 
              data = filter(country.results, country == "Bahrain"))+
@@ -689,15 +694,6 @@ ggplot(data = filter(subdat.list, country == "Cambodia"), aes(x=julian, y=reside
             data = filter(country.results, country == "Cambodia"))
 
 
-## Hong Kong SAR China = NOT SUITABLE 
-ggplot(data = filter(subdat.list, country == "Hong Kong SAR China"), aes(x=julian, y=residential)) + 
-  geom_line() + 
-  geom_vline(aes(xintercept=julian_lockdown, colour=restriction), 
-             data = filter(country.results, country == "Hong Kong SAR China"))+
-  geom_text(aes(x=julian_lockdown, y=10 + 2*as.numeric(level), label=level), 
-            data = filter(country.results, country == "Hong Kong SAR China"))
-
-
 ## Italy_C5_Close.public.transport_1 = Julian day = 71
 ggplot(data = filter(subdat.list, country == "Italy"), aes(x=julian, y=residential)) + 
   geom_line() + 
@@ -716,15 +712,6 @@ ggplot(data = filter(subdat.list, country == "Indonesia"), aes(x=julian, y=resid
             data = filter(country.results, country == "Indonesia"))
 
 
-## Mongolia_C7_Restrictions.on.internal.movement_2 = Julian day = 52  not sure if can use
-ggplot(data = filter(subdat.list, country == "Mongolia"), aes(x=julian, y=residential)) + 
-  geom_line() + 
-  geom_vline(aes(xintercept=julian_lockdown, colour=restriction), 
-             data = filter(country.results, country == "Mongolia"))+
-  geom_text(aes(x=julian_lockdown, y=10 + 2*as.numeric(level), label=level), 
-            data = filter(country.results, country == "Mongolia"))
-
-
 ## Portugal_C2_Workplace.closing_2 = Julian day = 72
 ggplot(data = filter(subdat.list, country == "Portugal"), aes(x=julian, y=residential)) + 
   geom_line() + 
@@ -732,23 +719,6 @@ ggplot(data = filter(subdat.list, country == "Portugal"), aes(x=julian, y=reside
              data = filter(country.results, country == "Portugal"))+
   geom_text(aes(x=julian_lockdown, y=10 + 2*as.numeric(level), label=level), 
             data = filter(country.results, country == "Portugal"))
-
-
-## South Korea = cant use?
-ggplot(data = filter(subdat.list, country == "South Korea"), aes(x=julian, y=residential)) + 
-  geom_line() + 
-  geom_vline(aes(xintercept=julian_lockdown, colour=restriction), 
-             data = filter(country.results, country == "South Korea"))+
-  geom_text(aes(x=julian_lockdown, y=10 + 2*as.numeric(level), label=level), 
-            data = filter(country.results, country == "South Korea"))
-
-## Taiwan = cant use
-ggplot(data = filter(subdat.list, country == "Taiwan"), aes(x=julian, y=residential)) + 
-  geom_line() + 
-  geom_vline(aes(xintercept=julian_lockdown, colour=restriction), 
-             data = filter(country.results, country == "Taiwan"))+
-  geom_text(aes(x=julian_lockdown, y=10 + 2*as.numeric(level), label=level), 
-            data = filter(country.results, country == "Taiwan"))
 
 
 ## Vietnam_C2_Workplace.closing_3 = Julian day = 87
@@ -760,58 +730,63 @@ ggplot(data = filter(subdat.list, country == "Vietnam"), aes(x=julian, y=residen
             data = filter(country.results, country == "Vietnam"))
 
 
-## Yemen_C3_Cancel.public.events_2 = Julian day = 77 - cant use??
-ggplot(data = filter(subdat.list, country == "Yemen"), aes(x=julian, y=residential)) + 
-  geom_line() + 
-  geom_vline(aes(xintercept=julian_lockdown, colour=restriction), 
-             data = filter(country.results, country == "Yemen"))+
-  geom_text(aes(x=julian_lockdown, y=10 + 2*as.numeric(level), label=level), 
-            data = filter(country.results, country == "Yemen"))
-
-
-
-# We exclude "Hong Kong SAR China","Mongolia", "South Korea", "Taiwan", "Yemen"
-# because they do not show an obvious change in lockdown date
-
 # Extract the model values for the countries that need corrected confinement dates
 corrections <- tibble(country = c("Bahrain", "Belize", "Cambodia", 
                                   "Italy", "Indonesia", "Portugal",
                                   "Vietnam"), 
-                      model = c("Bahrain_C2_Workplace.closing_2", "Belize_C1_School.closing_3",
-                                "Cambodia_C2_Workplace.closing_2", "Italy_C5_Close.public.transport_1",
-                                "Indonesia_C5_Close.public.transport_1", "Portugal_C2_Workplace.closing_2",
-                                "Vietnam_C2_Workplace.closing_3"),
-                      julian_lockdown = c(78, 80, 77, 71, 76, 72, 87),
-                      aics = NA,
-                      R2 = NA,
-                      t.lockdown = NA)
+                      julian_lockdown = c(78, 80, 77, 71, 76, 72, 87))
 
 # Add the ISO3 for the country names
 corrections$ISO3 <- countrycode(corrections$country, origin = 'country.name', destination = 'iso3c')
 
-# Loop through and extract the values from the selected models
-for (i in 1:7) { 
-
-corrections$t.lockdown[i] <- summary(mod.list[[corrections$model[i]]])$p.table["lockdown","t value"]
-corrections$pval[i] <- summary(mod.list[[corrections$model[i]]])$p.table["lockdown","Pr(>|t|)"]
-corrections$R2[i] <- summary(mod.list[[corrections$model[i]]])$r.sq
-corrections$aics[i] <- AIC(mod.list[[corrections$model[i]]])
-}
-
 library(tidyr)
-# Update the corrected model values
-chosen_residential <- bind_rows(corrections, chosen_start)
-chosen_residential <- distinct(chosen_residential, country, .keep_all = T)
 
-# Remove countries
-chosen_residential <- chosen_residential %>% filter(!country %in% c("Hong Kong SAR China","Mongolia", "South Korea", "Taiwan", "Yemen"))
+# Update the corrected model values
+lockdown <- bind_rows(corrections, lockdown) %>% distinct(country, .keep_all = T)
 
 ```
 
 
 
+## Date countries cross zero
+
+```{r}
+
+## Join the lockdown date to the google data
+google_countries <- left_join(google_countries, lockdown)
 
 
+## Identify the day that a country's mobility crosses zero
+## and calculate the number of days after lockdown that the 
+## country's mobility crossed zero
+
+# Nature (Parks and Beaches)
+nature <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(julian > julian_lockdown & `Parks & Beaches` >= 0) %>%
+            summarise(lockdown = min(julian_lockdown),
+                      parks_zero = min(julian),
+                      parks_diff = parks_zero - lockdown)
+
+# Necessities (Groceries and pharmacies)
+necessities <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(julian > julian_lockdown & `Grocery & Pharmacy` >= 0) %>%
+            summarise(lockdown = min(julian_lockdown),
+                      necessities_zero = min(julian),
+                      necessities_diff = necessities_zero - lockdown)
+
+# Luxuries (Retail & Recreation)
+luxuries <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(julian > julian_lockdown & `Retail & Recreation` >= 0) %>%
+            summarise(lockdown = min(julian_lockdown),
+                      luxuries_zero = min(julian),
+                      luxuries_diff = luxuries_zero - lockdown)
+
+# Join the dataframes
+returns <- left_join(necessities, luxuries)
+returns <- left_join(returns, nature)
+
+
+```
 
 
 # Add the continental info to the google data
@@ -833,9 +808,11 @@ continent<- tibble(ISO3, region_un, continent)
 
 # join the regional data to the google data
 google_countries <- left_join(google_countries, continent, by = "ISO3")
+returns <- left_join(returns, continent, by = "ISO3")
 
 # assign Tuvalu to Oceania
 google_countries$region_un[is.na(google_countries$region_un)] <-"Oceania"
+returns$region_un[is.na(returns$region_un)] <-"Oceania"
 
 ## Define "date" as a date 
 google_countries$date <- as.Date(google_countries$date)
@@ -843,28 +820,18 @@ google_countries$date <- as.Date(google_countries$date)
 ```
 
 
-
-## Date countries cross zero
+# Calculate the means
 
 ```{r}
 
-## Join the lockdown date to the google data
-google2 <- left_join(google, 
-                     chosen_start %>% select(country, ISO3, julian_lockdown))
+mean(returns$parks_diff, na.rm = T) #101 98
+mean(returns$necessities_diff, na.rm = T) #78 77
+mean(returns$luxuries_diff, na.rm = T) #142 136
 
-
-## Identify the day that a country's mobility crosses zero
-## and calculate the number of days after lockdown that the 
-## country's mobility crossed zero
-google2 %>% group_by(country, ISO3) %>% 
-            filter(julian > julian_lockdown & parks > 0) %>%
-            summarise(lockdown = min(julian_lockdown),
-                      parks_zero = min(julian),
-                      parks_diff = parks_zero - lockdown)
-
-
-
-
+returns %>% group_by(continent) %>% 
+            summarise(parks = mean(parks_diff, na.rm = T),
+                      necessities = mean(necessities_diff, na.rm = T),
+                      luxuries = mean(luxuries_diff, na.rm = T))
 
 ```
 
