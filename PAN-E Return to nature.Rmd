@@ -233,6 +233,7 @@ ggplot(google_median, aes(date, change)) +
   global_plottheme
 
 
+
 # Save the plot
 ggsave("Parks_grocery_residential.pdf", 
        dpi = 600, 
@@ -622,6 +623,7 @@ ggplot(data = googleplots, aes(x=julian, y=Residential)) +
   geom_vline(aes(xintercept = julian_lockdown), colour = "red")
 
 
+
 ```
 
 
@@ -762,21 +764,21 @@ google_countries <- left_join(google_countries, lockdown)
 
 # Nature (Parks and Beaches)
 nature <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(julian > julian_lockdown & `Parks & Beaches` >= 0) %>%
+            filter(julian > julian_lockdown & `Parks & Beaches` > 0) %>%
             summarise(lockdown = min(julian_lockdown),
                       parks_zero = min(julian),
                       parks_diff = parks_zero - lockdown)
 
 # Necessities (Groceries and pharmacies)
 necessities <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(julian > julian_lockdown & `Grocery & Pharmacy` >= 0) %>%
+            filter(julian > julian_lockdown & `Grocery & Pharmacy` > 0) %>%
             summarise(lockdown = min(julian_lockdown),
                       necessities_zero = min(julian),
                       necessities_diff = necessities_zero - lockdown)
 
 # Luxuries (Retail & Recreation)
 luxuries <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(julian > julian_lockdown & `Retail & Recreation` >= 0) %>%
+            filter(julian > julian_lockdown & `Retail & Recreation` > 0) %>%
             summarise(lockdown = min(julian_lockdown),
                       luxuries_zero = min(julian),
                       luxuries_diff = luxuries_zero - lockdown)
@@ -787,6 +789,64 @@ returns <- left_join(returns, nature)
 
 
 ```
+
+
+
+## Exploring days difference 
+
+```{r}
+
+returns$naturediff <-  returns$parks_zero - returns$necessities_zero
+returns$luxdiff <- returns$luxuries_zero - returns$necessities_zero
+
+
+
+mean(returns$naturediff, na.rm = T) #33 days after
+mean(returns$luxdiff, na.rm = T) #77
+
+
+returns %>% group_by(continent) %>% 
+            summarise(parks = mean(naturediff, na.rm = T),
+                      lux = mean(luxdiff, na.rm = T))
+
+```
+
+
+
+### Plot the individual country trends with lockdown date
+
+```{r, eval = FALSE}
+
+# Join the lockdown dates to the full Google data for plotting
+returnplots <- left_join(google_countries, returns, by = c("country", "ISO3"))
+
+library(ggplot2)
+library(ggforce)
+## PLOT
+ggplot(data = returnplots) + 
+  geom_line(aes(x=julian, y=`Parks & Beaches`), colour = "green") + 
+  geom_line(aes(x=julian, y=`Grocery & Pharmacy`), colour = "blue") + 
+  geom_line(aes(x=julian, y=`Retail & Recreation`), colour = "yellow") + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)+
+  geom_vline(aes(xintercept = parks_zero), colour = "green")+
+  geom_vline(aes(xintercept = necessities_zero), colour = "blue")+
+  geom_vline(aes(xintercept = luxuries_zero), colour = "yellow")
+
+ggplot(data = googleplots, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 2)+
+  geom_vline(aes(xintercept = julian_lockdown), colour = "red")
+
+ggplot(data = googleplots, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 3)+
+  geom_vline(aes(xintercept = julian_lockdown), colour = "red")
+
+
+```
+
+
+
 
 
 # Add the continental info to the google data
@@ -853,4 +913,241 @@ ggplot(data = estonia, aes(x=julian, y=Residential)) +
   geom_vline(aes(xintercept = 75), colour = "red")
 
 ```
+
+
+
+******************
+### EXPLORE THE DATE DIFFERENCES 
+******************
+
+## Download the Google mobility data
+
+In this chunk we download the Google mobility data, reorganise it and select only the overall country trends. 
+
+```{r, error=FALSE, warning=FALSE}
+
+# These data were downloaded in October 2020
+google <- readRDS(file = "Global_Mobility_Report.rds")
+
+# These data were downloaded in September 2022
+google <- read.csv("Global_Mobility_Report_latest.csv")
+
+# Filter for only 2020 data
+google$date2 <- as.Date(google$date)
+google <- google %>% filter(date2 <= "2020-12-31")
+
+# R reads Namibia's iso2 code is as an "is.na" object, so we will rename it to NA
+google$country_region_code[is.na(google$country_region_code)] <-"NA"
+
+library(countrycode)
+
+# Add the country codes so we ensure everything matches 
+google$ISO2 <- google$country_region_code
+google$ISO3 <- countrycode(google$ISO2, origin = 'iso2c', destination = 'iso3c')
+google$country <- countrycode(google$ISO2, origin = 'iso2c', destination = 'country.name')
+
+# Add Julian date
+google$julian<- (strptime(google$date, "%Y-%m-%d")$yday) + 1 # need to add 1 day because 2020 is a leap year
+
+library(naniar)
+
+# remove the subregions and metro areas and only keep the overall country pattern
+google <- google %>% filter(metro_area == "" & sub_region_1 == "")
+
+library(dplyr)
+
+# Select the specific data and rename columns
+google_countries <- google %>% select(country, ISO3, date,  julian,
+                    `Parks & Beaches`= 
+                     parks_percent_change_from_baseline,
+                    `Grocery & Pharmacy` = 
+                     grocery_and_pharmacy_percent_change_from_baseline,
+                     Residential = 
+                     residential_percent_change_from_baseline,
+                    `Retail & Recreation` = 
+                      retail_and_recreation_percent_change_from_baseline) 
+
+```
+
+### Remove countries
+
+The following 12 countries will be excluded because they do not show obvious change in lockdown dates or they do not have enough data:
+
+"Hong Kong SAR China", "Mongolia", "South Korea", "Taiwan", "Yemen", "Liechtenstein", "Réunion", "North Macedonia", "Tajikistan", "Antigua & Barbuda", "Aruba", "Guinea-Bissau" 
+
+
+```{r}
+
+# Remove countries from google dataframe
+google_countries <- google_countries %>% 
+                     filter(!country %in% c("Hong Kong SAR China", "Mongolia", 
+                                            "South Korea", "Taiwan", "Yemen", 
+                                            "Liechtenstein", "Réunion", "North Macedonia", 
+                                            "Tajikistan", "Antigua & Barbuda", "Aruba", 
+                                            "Guinea-Bissau"))
+
+```
+
+
+## Find the day people were home the most
+
+```{r}
+
+## Less that May 1st and the greatest at home to capture the first peak
+home <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(julian <= 122) %>%
+            filter(Residential == max(Residential)) %>%
+            summarise(max.home = min(julian))
+
+## Join
+google_countries <- left_join(google_countries, home)
+
+```
+
+
+
+## Date countries cross zero
+
+```{r}
+library(tidyverse)
+
+## Global peak lockdown occurred on April 5th, 2020 (Bates et al., 2021)
+## Julian date for peak lockdown = 96
+
+
+## Identify the day that a country's mobility crosses zero
+## and calculate the number of days after lockdown that the 
+## country's mobility crossed zero
+
+# Nature (Parks and Beaches)
+nature <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(julian > max.home & `Parks & Beaches` > 0) %>%
+            summarise(home =  min(max.home),
+                      parks_zero = min(julian),
+                      parks_diff = parks_zero - home)
+
+# Necessities (Groceries and pharmacies)
+necessities <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(julian > max.home & `Grocery & Pharmacy` > 0) %>%
+            summarise(home =  min(max.home),
+                      necessities_zero = min(julian),
+                      necessities_diff = necessities_zero - home)
+
+# Luxuries (Retail & Recreation)
+luxuries <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(julian > max.home & `Retail & Recreation` > 0) %>%
+            summarise(home =  min(max.home),
+                      luxuries_zero = min(julian),
+                      luxuries_diff = luxuries_zero - home)
+
+# Join the dataframes
+returns <- left_join(necessities, luxuries)
+returns <- left_join(returns, nature)
+
+
+returns$naturediff <-  returns$parks_zero - returns$necessities_zero
+returns$luxdiff <- returns$luxuries_zero - returns$necessities_zero
+
+
+
+mean(returns$naturediff, na.rm = T) #33 days after
+mean(returns$luxdiff, na.rm = T) #77
+
+
+returns %>% group_by(continent) %>% 
+            summarise(parks = mean(naturediff, na.rm = T),
+                      lux = mean(luxdiff, na.rm = T))
+
+```
+
+
+
+### Plot the individual country trends with lockdown date
+
+```{r, eval = FALSE}
+
+# Join the lockdown dates to the full Google data for plotting
+googleplots <- left_join(googlestart, chosen_start, by = c("country", "ISO3"))
+
+library(ggplot2)
+library(ggforce)
+## PLOT
+ggplot(data = googleplots, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)+
+  geom_vline(aes(xintercept = julian_lockdown), colour = "red")
+
+ggplot(data = googleplots, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 2)+
+  geom_vline(aes(xintercept = julian_lockdown), colour = "red")
+
+
+
+ggplot(data = google_countries, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 2)
+  
+
+
+
+```
+
+
+
+## Exploring trends
+```{r}
+
+# Join the lockdown dates to the full Google data for plotting
+returnplots <- left_join(google_countries, returns, by = c("country", "ISO3"))
+
+
+ggplot(data = returnplots, aes(x=julian, y=`Grocery & Pharmacy`)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)+
+  geom_hline(aes(yintercept = 0), linetype = "dashed")+
+  geom_vline(aes(xintercept = max.home), colour = "red")+
+  geom_vline(aes(xintercept = necessities_zero), colour = "blue")
+  
+
+
+```
+
+
+
+### Plot the individual country trends with lockdown date
+
+```{r, eval = FALSE}
+
+# Join the lockdown dates to the full Google data for plotting
+returnplots <- left_join(google_countries, returns, by = c("country", "ISO3"))
+
+library(ggplot2)
+library(ggforce)
+## PLOT
+ggplot(data = returnplots) + 
+  geom_line(aes(x=julian, y=`Parks & Beaches`), colour = "green") + 
+  geom_line(aes(x=julian, y=`Grocery & Pharmacy`), colour = "blue") + 
+  geom_line(aes(x=julian, y=`Retail & Recreation`), colour = "yellow") + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)+
+  geom_vline(aes(xintercept = parks_zero), colour = "green")+
+  geom_vline(aes(xintercept = necessities_zero), colour = "blue")+
+  geom_vline(aes(xintercept = luxuries_zero), colour = "yellow")
+
+ggplot(data = googleplots, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 2)+
+  geom_vline(aes(xintercept = julian_lockdown), colour = "red")
+
+ggplot(data = googleplots, aes(x=julian, y=Residential)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 3)+
+  geom_vline(aes(xintercept = julian_lockdown), colour = "red")
+
+
+```
+
+
+
+
 
