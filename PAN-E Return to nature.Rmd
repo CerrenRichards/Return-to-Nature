@@ -880,6 +880,8 @@ google_countries$date <- as.Date(google_countries$date)
 ```
 
 
+
+
 # Calculate the means
 
 ```{r}
@@ -1044,14 +1046,50 @@ luxuries <- google_countries %>% group_by(country, ISO3) %>%
 returns <- left_join(necessities, luxuries)
 returns <- left_join(returns, nature)
 
+```
 
+# Add the continental info to the google data
+
+```{r}
+# Load packages
+library(ggplot2);library(viridis); library(ggpubr);library(sf);library("rnaturalearth"); library("rnaturalearthdata"); library(tidyr)
+
+
+# extract continent info
+# These data will be used to match the world regions to the google data
+world <- ne_countries(scale = "medium", returnclass = "sf")
+world <- world %>% rename(ISO3 = iso_a3) 
+region_un <- world$region_un
+continent <- world$continent
+ISO3 <- world$ISO3
+continent<- tibble(ISO3, region_un, continent)
+
+
+# join the regional data to the google data
+google_countries <- left_join(google_countries, continent, by = "ISO3")
+returns <- left_join(returns, continent, by = "ISO3")
+
+# assign Tuvalu to Oceania
+google_countries$region_un[is.na(google_countries$region_un)] <-"Oceania"
+returns$region_un[is.na(returns$region_un)] <-"Oceania"
+
+## Define "date" as a date 
+google_countries$date <- as.Date(google_countries$date)
+
+```
+
+
+
+## Calculate differences in dates
+
+```{r}
 returns$naturediff <-  returns$parks_zero - returns$necessities_zero
 returns$luxdiff <- returns$luxuries_zero - returns$necessities_zero
 
 
 
-mean(returns$naturediff, na.rm = T) #20 days after nessesities
-mean(returns$luxdiff, na.rm = T) #63 after nessesities
+mean(returns$naturediff, na.rm = T) # 20 days after necessities
+mean(returns$luxdiff, na.rm = T) # 63 after necessities
 
 
 returns %>% group_by(continent) %>% 
@@ -1060,6 +1098,8 @@ returns %>% group_by(continent) %>%
 
 ```
 
+
+## EXPLORING PLOTS
 
 
 ### Plot the individual country trends with lockdown date
