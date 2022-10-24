@@ -934,10 +934,10 @@ google <- readRDS(file = "Global_Mobility_Report.rds")
 # These data were downloaded in September 2022
 google <- read.csv("Global_Mobility_Report_latest.csv")
 
-# Filter for only 2020 data
-google$date2 <- as.Date(google$date)
-google <- google %>% filter(date2 <= "2020-12-31")
+# remove the subregions and metro areas and only keep the overall country pattern
+google <- google %>% filter(metro_area == "" & sub_region_1 == "")
 
+library(naniar)
 # R reads Namibia's iso2 code is as an "is.na" object, so we will rename it to NA
 google$country_region_code[is.na(google$country_region_code)] <-"NA"
 
@@ -948,18 +948,14 @@ google$ISO2 <- google$country_region_code
 google$ISO3 <- countrycode(google$ISO2, origin = 'iso2c', destination = 'iso3c')
 google$country <- countrycode(google$ISO2, origin = 'iso2c', destination = 'country.name')
 
-# Add Julian date
-google$julian<- (strptime(google$date, "%Y-%m-%d")$yday) + 1 # need to add 1 day because 2020 is a leap year
+# Set the date as POSIXct
+google$Date <- as.POSIXct(google$date, format='%Y-%m-%d')
 
-library(naniar)
-
-# remove the subregions and metro areas and only keep the overall country pattern
-google <- google %>% filter(metro_area == "" & sub_region_1 == "")
 
 library(dplyr)
 
 # Select the specific data and rename columns
-google_countries <- google %>% select(country, ISO3, date,  julian,
+google_countries <- google %>% select(country, ISO3, Date, 
                     `Parks & Beaches`= 
                      parks_percent_change_from_baseline,
                     `Grocery & Pharmacy` = 
@@ -968,6 +964,29 @@ google_countries <- google %>% select(country, ISO3, date,  julian,
                      residential_percent_change_from_baseline,
                     `Retail & Recreation` = 
                       retail_and_recreation_percent_change_from_baseline) 
+
+
+
+##____________________________
+## Older code
+
+# Filter for only 2020 data
+google$date2 <- as.Date(google$date)
+google <- google %>% filter(date2 <= "2020-12-31")
+
+# Filter for only 2021 data to find the countries that don't pass zero in 2020
+google$date2 <- as.Date(google$date)
+google <- google %>% filter(date2 <= "2021-12-31")
+
+
+# Add Julian date
+google$julian<- (strptime(google$date, "%Y-%m-%d")$yday) + 1 # need to add 1 day because 2020 is a leap year
+
+
+## We have two years of data so we will need to not mix up the julian dates 
+## When plotting with a date in ggplot, it can sometimes take a long time, so here we
+## Will use id
+google_countries<- google_countries %>% group_by(ISO3) %>% mutate(id = row_number())
 
 ```
 
@@ -995,17 +1014,76 @@ google_countries <- google_countries %>%
 
 ```{r}
 
+
 ## Less that May 1st and the greatest at home to capture the first peak
 home <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(julian <= 122) %>%
-            filter(Residential == max(Residential)) %>%
-            summarise(max.home = min(julian))
+            filter(Date <= "2020-05-01") %>%
+            filter(Residential == max(Residential, na.rm = T)) %>%
+            summarise(max.home = min(Date))
+
+
+
+## Less that May 1st and the greatest at home to capture the first peak
+home <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(date <= "2020-05-01") %>%
+            filter(Residential == max(Residential, na.rm = T)) %>%
+            summarise(max.home = min(julian),
+                      max.home1 = min(date),
+                      id.min = min(id))
 
 ## Join
 google_countries <- left_join(google_countries, home)
 
+
 ```
 
+## exploring the luxuries longer
+```{r}
+ggplot(data = google2, aes(x=date, y=`Retail & Recreation`)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)
+```
+
+## Date countries cross zero (2021 too)
+```{r}
+library(tidyverse)
+
+## Global peak lockdown occurred on April 5th, 2020 (Bates et al., 2021)
+## Julian date for peak lockdown = 96
+
+
+## Identify the day that a country's mobility crosses zero
+## and calculate the number of days after lockdown that the 
+## country's mobility crossed zero
+
+# Nature (Parks and Beaches)
+nature <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & `Parks & Beaches` > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      parks_zero = min(Date), # The first date people returned to nature
+                      parks_diff = parks_zero - home) # calc difference 
+            
+
+# Necessities (Groceries and pharmacies)
+necessities  <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & `Grocery & Pharmacy` > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      necessities_zero = min(Date), # The first date people returned to nature
+                      necessities_diff = necessities_zero - home) # calc difference 
+
+
+# Luxuries (Retail & Recreation)
+luxuries <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & `Retail & Recreation` > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      luxuries_zero = min(Date), # The first date people returned to nature
+                      luxuries_diff = luxuries_zero - home) # calc difference 
+
+# Join the dataframes
+returns <- left_join(necessities, luxuries)
+returns <- left_join(returns, nature)
+
+```
 
 
 ## Date countries cross zero
@@ -1083,18 +1161,18 @@ google_countries$date <- as.Date(google_countries$date)
 ## Calculate differences in dates
 
 ```{r}
-returns$naturediff <-  returns$parks_zero - returns$necessities_zero
-returns$luxdiff <- returns$luxuries_zero - returns$necessities_zero
+returns$naturediff <-  as.numeric(returns$parks_zero - returns$necessities_zero, units = "days")
+returns$luxdiff <- as.numeric(returns$luxuries_zero - returns$necessities_zero, units = "days")
 
 
 
-mean(returns$naturediff, na.rm = T) # 20 days after necessities
-mean(returns$luxdiff, na.rm = T) # 63 after necessities
+median(returns$naturediff, na.rm = T) # 20 days after necessities
+median(returns$luxdiff, na.rm = T) # 63 after necessities
 
 
 returns %>% group_by(continent) %>% 
-            summarise(parks = mean(naturediff, na.rm = T),
-                      lux = mean(luxdiff, na.rm = T))
+            summarise(parks = median(naturediff, na.rm = T),
+                      lux = median(luxdiff, na.rm = T))
 
 ```
 
@@ -1143,7 +1221,7 @@ ggplot(data = google_countries, aes(x=julian, y=Residential)) +
 returnplots <- left_join(google_countries, returns, by = c("country", "ISO3"))
 
 ## NESSESITIES
-ggplot(data = returnplots, aes(x=julian, y=`Grocery & Pharmacy`)) + 
+ggplot(data = returnplots, aes(x=id, y=`Grocery & Pharmacy`)) + 
   geom_line() + 
   facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)+
   geom_hline(aes(yintercept = 0), linetype = "dashed")+
@@ -1152,12 +1230,26 @@ ggplot(data = returnplots, aes(x=julian, y=`Grocery & Pharmacy`)) +
   
 
 ## NATURE
-ggplot(data = returnplots, aes(x=julian, y=`Parks & Beaches`)) + 
+ggplot(data = returnplots, aes(x=date, y=`Parks & Beaches`)) + 
   geom_line() + 
   facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)+
   geom_hline(aes(yintercept = 0), linetype = "dashed")+
   geom_vline(aes(xintercept = max.home), colour = "red")+
   geom_vline(aes(xintercept = parks_zero), colour = "blue")
+
+
+returnplots$date <- as.Date(returnplots$date)
+ggplot(data = (filter(returnplots, country == "Canada")), aes(x=date, y=`Parks & Beaches`)) + 
+  geom_line() 
+
+
+## LUXURIES
+ggplot(data = returnplots, aes(x=id, y=`Retail & Recreation`)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)+
+  geom_hline(aes(yintercept = 0), linetype = "dashed")+
+  geom_vline(aes(xintercept = max.home), colour = "red")+
+  geom_vline(aes(xintercept = luxuries_zero), colour = "blue")
 
 ```
 
