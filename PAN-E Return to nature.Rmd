@@ -965,29 +965,6 @@ google_countries <- google %>% select(country, ISO3, Date,
                     `Retail & Recreation` = 
                       retail_and_recreation_percent_change_from_baseline) 
 
-
-
-##____________________________
-## Older code
-
-# Filter for only 2020 data
-google$date2 <- as.Date(google$date)
-google <- google %>% filter(date2 <= "2020-12-31")
-
-# Filter for only 2021 data to find the countries that don't pass zero in 2020
-google$date2 <- as.Date(google$date)
-google <- google %>% filter(date2 <= "2021-12-31")
-
-
-# Add Julian date
-google$julian<- (strptime(google$date, "%Y-%m-%d")$yday) + 1 # need to add 1 day because 2020 is a leap year
-
-
-## We have two years of data so we will need to not mix up the julian dates 
-## When plotting with a date in ggplot, it can sometimes take a long time, so here we
-## Will use id
-google_countries<- google_countries %>% group_by(ISO3) %>% mutate(id = row_number())
-
 ```
 
 ### Remove countries
@@ -1022,26 +999,10 @@ home <- google_countries %>% group_by(country, ISO3) %>%
             summarise(max.home = min(Date))
 
 
-
-## Less that May 1st and the greatest at home to capture the first peak
-home <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(date <= "2020-05-01") %>%
-            filter(Residential == max(Residential, na.rm = T)) %>%
-            summarise(max.home = min(julian),
-                      max.home1 = min(date),
-                      id.min = min(id))
-
 ## Join
 google_countries <- left_join(google_countries, home)
 
 
-```
-
-## exploring the luxuries longer
-```{r}
-ggplot(data = google2, aes(x=date, y=`Retail & Recreation`)) + 
-  geom_line() + 
-  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)
 ```
 
 ## Date countries cross zero (2021 too)
@@ -1083,52 +1044,24 @@ luxuries <- google_countries %>% group_by(country, ISO3) %>%
 returns <- left_join(necessities, luxuries)
 returns <- left_join(returns, nature)
 
+
+# Calculate the differences in days
+returns$naturediff <-  as.numeric(returns$parks_zero - returns$necessities_zero, units = "days")
+returns$luxdiff <- as.numeric(returns$luxuries_zero - returns$necessities_zero, units = "days")
+
+
+# Median global values
+median(returns$naturediff, na.rm = T) # 13 days after necessities
+median(returns$luxdiff, na.rm = T) # 78 after necessities
+
+
 ```
 
 
-## Date countries cross zero
+# Continental differences
 
 ```{r}
-library(tidyverse)
 
-## Global peak lockdown occurred on April 5th, 2020 (Bates et al., 2021)
-## Julian date for peak lockdown = 96
-
-
-## Identify the day that a country's mobility crosses zero
-## and calculate the number of days after lockdown that the 
-## country's mobility crossed zero
-
-# Nature (Parks and Beaches)
-nature <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(julian > max.home & `Parks & Beaches` > 0) %>%
-            summarise(home =  min(max.home),
-                      parks_zero = min(julian),
-                      parks_diff = parks_zero - home)
-
-# Necessities (Groceries and pharmacies)
-necessities <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(julian > max.home & `Grocery & Pharmacy` > 0) %>%
-            summarise(home =  min(max.home),
-                      necessities_zero = min(julian),
-                      necessities_diff = necessities_zero - home)
-
-# Luxuries (Retail & Recreation)
-luxuries <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(julian > max.home & `Retail & Recreation` > 0) %>%
-            summarise(home =  min(max.home),
-                      luxuries_zero = min(julian),
-                      luxuries_diff = luxuries_zero - home)
-
-# Join the dataframes
-returns <- left_join(necessities, luxuries)
-returns <- left_join(returns, nature)
-
-```
-
-# Add the continental info to the google data
-
-```{r}
 # Load packages
 library(ggplot2);library(viridis); library(ggpubr);library(sf);library("rnaturalearth"); library("rnaturalearthdata"); library(tidyr)
 
@@ -1139,40 +1072,27 @@ world <- ne_countries(scale = "medium", returnclass = "sf")
 world <- world %>% rename(ISO3 = iso_a3) 
 region_un <- world$region_un
 continent <- world$continent
+subregion <- world$subregion
 ISO3 <- world$ISO3
-continent<- tibble(ISO3, region_un, continent)
+continent<- tibble(ISO3, region_un, continent, subregion)
 
 
 # join the regional data to the google data
-google_countries <- left_join(google_countries, continent, by = "ISO3")
 returns <- left_join(returns, continent, by = "ISO3")
 
 # assign Tuvalu to Oceania
-google_countries$region_un[is.na(google_countries$region_un)] <-"Oceania"
 returns$region_un[is.na(returns$region_un)] <-"Oceania"
 
-## Define "date" as a date 
-google_countries$date <- as.Date(google_countries$date)
 
-```
-
-
-
-## Calculate differences in dates
-
-```{r}
-returns$naturediff <-  as.numeric(returns$parks_zero - returns$necessities_zero, units = "days")
-returns$luxdiff <- as.numeric(returns$luxuries_zero - returns$necessities_zero, units = "days")
-
-
-
-median(returns$naturediff, na.rm = T) # 20 days after necessities
-median(returns$luxdiff, na.rm = T) # 63 after necessities
-
-
-returns %>% group_by(continent) %>% 
+## Summarise the continental differences
+regions <- returns %>% group_by(subregion) %>% 
             summarise(parks = median(naturediff, na.rm = T),
-                      lux = median(luxdiff, na.rm = T))
+                      parks.min = min(naturediff, na.rm = T),
+                      parks.max = max(naturediff, na.rm = T),
+                      lux = median(luxdiff, na.rm = T),
+                      lux.min = min(luxdiff, na.rm = T),
+                      lux.max = max(luxdiff, na.rm = T),
+                      countries = n())
 
 ```
 
