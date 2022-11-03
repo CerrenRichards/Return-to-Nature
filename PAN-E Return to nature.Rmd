@@ -1092,7 +1092,10 @@ regions <- returns %>% group_by(subregion) %>%
                       lux = median(luxdiff, na.rm = T),
                       lux.min = min(luxdiff, na.rm = T),
                       lux.max = max(luxdiff, na.rm = T),
-                      countries = n())
+                      countries = n()) %>%
+            arrange(parks)
+
+write.csv(regions, "regions.csv")
 
 ```
 
@@ -1141,9 +1144,9 @@ ggplot(data = google_countries, aes(x=julian, y=Residential)) +
 returnplots <- left_join(google_countries, returns, by = c("country", "ISO3"))
 
 ## NESSESITIES
-ggplot(data = returnplots, aes(x=id, y=`Grocery & Pharmacy`)) + 
+ggplot(data = returnplots, aes(x=Date, y=`Grocery & Pharmacy`)) + 
   geom_line() + 
-  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)+
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 3)+
   geom_hline(aes(yintercept = 0), linetype = "dashed")+
   geom_vline(aes(xintercept = max.home), colour = "red")+
   geom_vline(aes(xintercept = necessities_zero), colour = "blue")
@@ -1208,6 +1211,273 @@ ggplot(data = googleplots, aes(x=julian, y=Residential)) +
 ```
 
 
+## exploring the luxuries longer
+```{r}
+ggplot(data = google2, aes(x=date, y=`Retail & Recreation`)) + 
+  geom_line() + 
+  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)
+```
 
 
+# Exploring countries with <10 days difference
+
+```{r}
+# Join the lockdown dates to the full Google data for plotting
+returnplots <- left_join(google_countries, returns, by = c("country", "ISO3"))
+
+returnplots %>% filter(necessities_diff <= 20)
+
+
+
+
+ggplot(data = filter(returnplots, continent == "South America"),
+       aes(x=Date, y=`Parks & Beaches`)) + 
+  geom_line() + 
+  facet_wrap(~country, scale="free_y")+
+  geom_hline(aes(yintercept = 0), linetype = "dashed")+
+  geom_vline(aes(xintercept = max.home), colour = "red")+
+  geom_vline(aes(xintercept = parks_zero), colour = "blue")
+
+
+
+
+
+
+ggplot(data = filter(returnplots, continent == "Africa"),
+       aes(x=Date, y=`Grocery & Pharmacy`)) + 
+  geom_line() + 
+  facet_wrap(~country, scale="free_y")+
+  geom_hline(aes(yintercept = 0), linetype = "dashed")+
+  geom_vline(aes(xintercept = max.home), colour = "red")+
+  geom_vline(aes(xintercept = necessities_zero), colour = "blue")
+
+
+
+
+ggplot(data = filter(returnplots, continent == "Oceania"),
+       aes(x=Date, y=`Retail & Recreation`)) + 
+  geom_line() + 
+  facet_wrap(~country, scale="free_y")+
+  geom_hline(aes(yintercept = 0), linetype = "dashed")+
+  geom_vline(aes(xintercept = max.home), colour = "red")+
+  geom_vline(aes(xintercept = luxuries_zero), colour = "blue")
+
+```
+
+# Mean trends per region
+
+```{r}
+
+returnsubplots <- returnplots %>% group_by(continent, Date) %>% 
+                                  summarise(`Parks & Beaches`= median(`Parks & Beaches`),
+                                            `Grocery & Pharmacy`= median(`Grocery & Pharmacy`),
+                                            `Retail & Recreation`= median(`Retail & Recreation`),
+                                            necessities = median(necessities_zero),
+                                            nature = median(parks_zero),
+                                            luxuries = median(luxuries_zero))
+
+
+
+
+## Rearrange for plotting
+returnsubplots2 <- returnsubplots %>% gather(type, change, `Parks & Beaches`:`Retail & Recreation`)
+
+## Define plot theme
+global_plottheme <- theme_bw(base_size = 15)+ # set the background theme       
+  theme(panel.grid.major = element_blank(), # remove the major lines
+        panel.grid.minor = element_blank(), # remove the minor lines
+        axis.title.x = element_blank(),
+        strip.text.x = element_text(size = 15, color = "white"), 
+        strip.background = element_rect(fill="black"))
+
+
+## Create global plot
+ggplot(returnsubplots2, aes(Date, change)) +
+  geom_line(data = returnsubplots2, aes(group = continent, colour = continent))+
+  #geom_line(size = 1)+
+ # geom_vline(xintercept = as.numeric(as.Date("2020-07-28")), 
+#             linetype = "dashed", colour = "red", size = 1)+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+  #scale_x_date(date_breaks = "8 week", date_labels = "%b %d")+
+  facet_wrap(~type, scales = "free", nrow = 3)+
+  labs(y = "Change in length of visit (%)")+
+  global_plottheme
+
+```
+
+
+
+# Visualising
+
+```{r}
+## Set plot theme
+plot.theme <-  theme_bw(base_size = 15)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(axis.title.y = element_text(vjust = 3)) +
+  theme(axis.title.x = element_text(vjust = -1))+
+  theme(strip.text.x = element_text(size = 16, color = "white", face = "bold"), 
+        strip.background = element_rect(fill="black"),
+        legend.title = element_blank(),
+        legend.position="none")
+
+
+## NATURE PLOT
+# Rearrange the regions for plotting
+regions <- regions %>% arrange(desc(parks))%>%
+  mutate(subregion=factor(subregion, levels=subregion))
+
+# Set colour
+regions <- regions %>% mutate(Colour = ifelse(parks < 0, "#01579B","#B71C1C"))
+
+# Plot
+ggplot(data = regions,
+       aes(x = subregion, y = parks, fill = Colour)) + 
+    geom_col()+
+    plot.theme+
+    geom_hline(yintercept = 0)+
+    scale_fill_identity(guide = FALSE)+
+    labs(x = "Geographic Region", y = 'Number of Days (Median)')+
+   coord_flip()+
+  theme(axis.title.y = element_blank())+
+  ggtitle("Number of days taken to return to nature \n after people returned to necessities")
+
+
+
+## LUXURIES
+# Rearrange the regions for plotting
+regions <- regions %>% arrange(desc(lux))%>%
+  mutate(subregion=factor(subregion, levels=subregion))
+
+# Set colour
+regions <- regions %>% mutate(Colour = ifelse(lux < 0, "#01579B","#B71C1C"))
+
+# Plot
+ggplot(data = regions,
+       aes(x = subregion, y = lux, fill = Colour)) + 
+    geom_col()+
+    plot.theme+
+    geom_hline(yintercept = 0)+
+    scale_fill_identity(guide = FALSE)+
+    labs(x = "Geographic Region", y = 'Number of Days (Median)')+
+   coord_flip()+
+  theme(axis.title.y = element_blank())+
+  ggtitle("Number of days taken to return to luxuries \n after people returned to necessities")
+
+
+
+```
+
+## World Map
+
+```{r}
+
+#Get world map info
+world_map <- map_data("world") %>%  
+              group_by(region) %>% 
+              summarise(long=mean(long),
+                        lat=mean(lat)) %>%
+              rename(country = region)
+
+# Join the data
+returns <- left_join(returns, world_map)
+
+
+## Summarise the continental differences
+regions <- returns %>% group_by(subregion) %>% 
+            summarise(parks = median(naturediff, na.rm = T),
+                      parks.min = min(naturediff, na.rm = T),
+                      parks.max = max(naturediff, na.rm = T),
+                      lux = median(luxdiff, na.rm = T),
+                      lux.min = min(luxdiff, na.rm = T),
+                      lux.max = max(luxdiff, na.rm = T),
+                      long=mean(long, na.rm = T),
+                      lat=mean(lat, na.rm = T),
+                      countries = n()) %>%
+            arrange(parks)
+
+
+regions <- returns %>% group_by(continent) %>% 
+            summarise(parks = median(naturediff, na.rm = T),
+                      parks.min = min(naturediff, na.rm = T),
+                      parks.max = max(naturediff, na.rm = T),
+                      lux = median(luxdiff, na.rm = T),
+                      lux.min = min(luxdiff, na.rm = T),
+                      lux.max = max(luxdiff, na.rm = T),
+                      long=mean(long, na.rm = T),
+                      lat=mean(lat, na.rm = T),
+                      countries = n()) %>%
+            arrange(parks)
+
+
+
+## Set the map theme
+maptheme <-  theme_void(base_size = 15)+
+  theme(axis.title.y = element_blank(), 
+        axis.title.x = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank())
+
+# World map with dots for locations
+ggplot() +
+    geom_sf(data = world, fill = "snow3", colour = "snow3", size = 0.2) +
+     maptheme+
+    geom_point(data = regions, 
+               aes(x = long, y = lat))+
+    coord_sf(xlim = c(-180, 180), ylim = c(-60, 90), expand = FALSE)
+ 
+
+
+# Make bar plots
+# Gather the data for plotting
+map.regions <- regions %>% 
+            select(subregion, countries, parks, lux, long, lat)  %>%
+            gather(Mobility, Difference, parks, lux)
+
+
+map.regions$mob <- "mob"
+
+map.regions$Mobility <- factor(map.regions$Mobility, levels = c("parks", "lux"))
+
+## Set plot theme
+plot.theme <-  theme_void()+
+  theme(legend.title = element_blank(),
+        legend.position="none")
+
+ 
+# Plot
+ggplot(data = map.regions,
+       aes(x = mob, y = Difference, fill = Mobility)) +
+    scale_fill_manual(values = c("#00868B", "#FF6A00"))+
+    geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
+    geom_hline(yintercept = 0, size = 0.1)+
+    facet_wrap(~subregion, strip.position = "bottom")+
+    plot.theme
+
+
+
+
+
+
+
+
+ 
+ library(ggsubplot)
+ map.plot+ 
+   geom_subplot2d(aes(long, lat, subplot = geom_bar(aes(x = Mobility, y = Difference, fill = Mobility, width=1), 
+                                                    position = "identity")), ref = NULL, data = map.regions)
+ 
+
+ 
+ 
+    geom_point(data = colonies, 
+               aes(x = Lon, y = Lat),
+               size = 3, shape=21, stroke = 1.5) +
+    scale_fill_viridis_d()+
+    scale_color_viridis_d()+
+    coord_sf(xlim = c(-110, -25), ylim = c(35, 80), expand = FALSE)+
+    maptheme+
+    theme(legend.position="none")
+
+
+```
 
