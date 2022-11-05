@@ -1055,6 +1055,11 @@ median(returns$naturediff, na.rm = T) # 13 days after necessities
 median(returns$luxdiff, na.rm = T) # 78 after necessities
 
 
+# Global median for return dates
+median(returns$necessities_diff, na.rm = T) # 48 days after necessities
+median(returns$parks_diff, na.rm = T) # 78 after necessities
+median(returns$luxuries_diff, na.rm = T) # 153 after necessities
+
 ```
 
 
@@ -1210,13 +1215,6 @@ ggplot(data = googleplots, aes(x=julian, y=Residential)) +
 
 ```
 
-
-## exploring the luxuries longer
-```{r}
-ggplot(data = google2, aes(x=date, y=`Retail & Recreation`)) + 
-  geom_line() + 
-  facet_wrap_paginate(~country, ncol = 7, nrow = 7, scale="free_y", page = 1)
-```
 
 
 # Exploring countries with <10 days difference
@@ -1390,6 +1388,9 @@ regions <- returns %>% group_by(subregion) %>%
                       lux = median(luxdiff, na.rm = T),
                       lux.min = min(luxdiff, na.rm = T),
                       lux.max = max(luxdiff, na.rm = T),
+                      nature = median(parks_diff, na.rm = T),
+                      necessities = median(necessities_diff, na.rm = T),
+                      luxuries = median(luxuries_diff, na.rm = T),
                       long=mean(long, na.rm = T),
                       lat=mean(lat, na.rm = T),
                       countries = n()) %>%
@@ -1408,6 +1409,10 @@ regions <- returns %>% group_by(continent) %>%
                       countries = n()) %>%
             arrange(parks)
 
+## Colour countries that we have used
+# Set colors
+world <- mutate(world, fill = ifelse(ISO3 %in% returns$ISO3, "Monitored", "Non-monitored"))
+
 
 
 ## Set the map theme
@@ -1415,16 +1420,25 @@ maptheme <-  theme_void(base_size = 15)+
   theme(axis.title.y = element_blank(), 
         axis.title.x = element_blank(),
         panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank())
+        panel.grid.minor = element_blank(),
+        legend.title = element_blank(),
+        legend.position="none")
 
 # World map with dots for locations
+
+library(ggrepel)
+
 ggplot() +
     geom_sf(data = world, fill = "snow3", colour = "snow3", size = 0.2) +
      maptheme+
+    geom_sf(data = world, aes(fill = fill), colour = "cornsilk", size = 0.01) +
+    scale_fill_manual(values = c("cornsilk", "snow3"))+
     geom_point(data = regions, 
-               aes(x = long, y = lat))+
+               aes(x = long, y = lat),
+               shape=21)+
+    #geom_text_repel(data = regions, 
+    #           aes(x = long, y = lat, label = subregion), box.padding = 0.5, max.overlaps = Inf) +
     coord_sf(xlim = c(-180, 180), ylim = c(-60, 90), expand = FALSE)
- 
 
 
 # Make bar plots
@@ -1433,9 +1447,15 @@ map.regions <- regions %>%
             select(subregion, countries, parks, lux, long, lat)  %>%
             gather(Mobility, Difference, parks, lux)
 
+map.regions2 <- regions %>% 
+            select(subregion, countries, nature, luxuries, necessities, long, lat)  %>%
+            gather(Mobility, Difference, nature:necessities)
 
+
+# define for plotting
 map.regions$mob <- "mob"
 
+# define for plotting
 map.regions$Mobility <- factor(map.regions$Mobility, levels = c("parks", "lux"))
 
 ## Set plot theme
@@ -1454,30 +1474,65 @@ ggplot(data = map.regions,
     plot.theme
 
 
+library(viridis)
 
+ggplot(data = map.regions2,
+       aes(x = mob, y = Difference, fill = Mobility)) +
+     scale_fill_viridis(discrete = TRUE, direction = -1)+
+    #scale_fill_manual(values = c("#C15CCB","#00868B", "#FF6A00"))+
+    geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
+    #geom_hline(yintercept = 0, size = 0.1)+
+    facet_wrap(~subregion, strip.position = "bottom")+
+    plot.theme
 
-
-
-
-
- 
- library(ggsubplot)
- map.plot+ 
-   geom_subplot2d(aes(long, lat, subplot = geom_bar(aes(x = Mobility, y = Difference, fill = Mobility, width=1), 
-                                                    position = "identity")), ref = NULL, data = map.regions)
- 
-
- 
- 
-    geom_point(data = colonies, 
-               aes(x = Lon, y = Lat),
-               size = 3, shape=21, stroke = 1.5) +
-    scale_fill_viridis_d()+
-    scale_color_viridis_d()+
-    coord_sf(xlim = c(-110, -25), ylim = c(35, 80), expand = FALSE)+
-    maptheme+
-    theme(legend.position="none")
 
 
 ```
+
+## Global plot for time at parks, pharmacies and residential
+
+Here we calculate and plot the global median change of time at parks, pharmacies and residential during lockdown.
+
+At the global scale, people returned to nature five days before (parks & beaches: 19-08-2020) they returned to get basic human needs (grocery & pharmacy: 24-08-2020), and 15 days before they returned to retail and recreation stores (03-09-2020). Date represents the day that the global median crossed zero.
+
+```{r}
+library(dplyr); library(tidyr)
+
+## Calculate global median movement at parks, pharmacies and residential
+google_median <- google_countries %>% group_by(Date) %>% 
+      summarise(`Parks & Beaches`= median(`Parks & Beaches`, na.rm = TRUE),
+                `Grocery & Pharmacy` = median(`Grocery & Pharmacy`, na.rm = TRUE),
+                `Retail & Recreation` = median(`Retail & Recreation`, na.rm = TRUE))
+
+
+## Rearrange for plotting
+google_median <- google_median %>% gather(type, change, `Parks & Beaches`:`Retail & Recreation`)
+
+## Define plot theme
+global_plottheme <- theme_bw(base_size = 15)+ # set the background theme       
+  theme(panel.grid.major = element_blank(), # remove the major lines
+        panel.grid.minor = element_blank(), # remove the minor lines
+        axis.title.x = element_blank(),
+        strip.text.x = element_text(size = 15, color = "white"), 
+        strip.background = element_rect(fill="black"),
+        legend.title = element_blank(),
+        legend.position="none")
+
+
+## Create global plot
+ggplot(google_median, aes(Date, change)) +
+  geom_line( aes(colour = type))+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+  labs(y = "Change in length of visit (%)")+
+  scale_colour_manual(values = c( "#C15CCB","#00868B", "#FF6A00"))+
+  global_plottheme
+
+
+# Save the plot
+ggsave("Parks_grocery_residential.pdf", 
+       dpi = 600, 
+       width = 160, height = 200, unit = "mm")
+
+```
+
 
