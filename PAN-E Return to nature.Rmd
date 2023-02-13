@@ -3,6 +3,8 @@ title: "PAN-E Return to nature"
 author: "Cerren Richards"
 date: "14/05/2022"
 output: pdf_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -934,6 +936,7 @@ google <- readRDS(file = "Global_Mobility_Report.rds")
 # These data were downloaded in September 2022
 google <- read.csv("Global_Mobility_Report_latest.csv")
 
+library(dplyr)
 # remove the subregions and metro areas and only keep the overall country pattern
 google <- google %>% filter(metro_area == "" & sub_region_1 == "")
 
@@ -951,8 +954,6 @@ google$country <- countrycode(google$ISO2, origin = 'iso2c', destination = 'coun
 # Set the date as POSIXct
 google$Date <- as.POSIXct(google$date, format='%Y-%m-%d')
 
-
-library(dplyr)
 
 # Select the specific data and rename columns
 google_countries <- google %>% select(country, ISO3, Date, 
@@ -991,7 +992,6 @@ google_countries <- google_countries %>%
 
 ```{r}
 
-
 ## Less that May 1st and the greatest at home to capture the first peak
 home <- google_countries %>% group_by(country, ISO3) %>% 
             filter(Date <= "2020-05-01") %>%
@@ -1006,6 +1006,7 @@ google_countries <- left_join(google_countries, home)
 ```
 
 ## Date countries cross zero
+
 ```{r}
 library(tidyverse)
 
