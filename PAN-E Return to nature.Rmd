@@ -1090,20 +1090,6 @@ returns <- left_join(returns, continent, by = "ISO3")
 returns$region_un[is.na(returns$region_un)] <-"Oceania"
 
 
-## Summarise the continental differences
-regions <- returns %>% group_by(subregion) %>% 
-            summarise(parks = median(naturediff, na.rm = T),
-                      parks.min = min(naturediff, na.rm = T),
-                      parks.max = max(naturediff, na.rm = T),
-                      lux = median(luxdiff, na.rm = T),
-                      lux.min = min(luxdiff, na.rm = T),
-                      lux.max = max(luxdiff, na.rm = T),
-                      countries = n()) %>%
-            arrange(parks)
-
-
-write.csv(regions, "regions.csv")
-
 ```
 
 
@@ -1138,27 +1124,33 @@ regions <- returns %>% group_by(subregion) %>%
                       countries = n()) %>%
             arrange(parks)
 
-
+# Save
+write.csv(regions, "regions.csv")
 
 ## Colour countries that we have used
 # Set colors
-world <- mutate(world, fill = ifelse(ISO3 %in% returns$ISO3, "Monitored", "Non-monitored"))
+world <- mutate(world, fill = ifelse(ISO3 %in% returns$ISO3, 
+                                     "Monitored", "Non-monitored"))
 
 
 ## Set the map theme
-maptheme <-  theme_void(base_size = 15)+
+maptheme <-  theme_bw(base_size = 15)+
   theme(axis.title.y = element_blank(), 
         axis.title.x = element_blank(),
         panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
         legend.title = element_blank(),
-        legend.position="none")
+        legend.position="none",
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())
 
 
 library(ggrepel)
 
 # World map with dots for locations
-ggplot() +
+map.plot<- ggplot() +
     geom_sf(data = world, fill = "snow3", colour = "snow3", size = 0.2) +
      maptheme+
     geom_sf(data = world, aes(fill = fill), colour = "cornsilk", size = 0.01) +
@@ -1166,10 +1158,13 @@ ggplot() +
     geom_point(data = regions, 
                aes(x = long, y = lat),
                shape=21)+
-    #geom_text_repel(data = regions, 
-    #           aes(x = long, y = lat, label = subregion), box.padding = 0.5, max.overlaps = Inf) +
-    coord_sf(xlim = c(-180, 180), ylim = c(-60, 90), expand = FALSE)
+    coord_sf(xlim = c(-180, 220), ylim = c(-65, 120), expand = FALSE)
 
+
+
+# Save the plot
+ggsave("map plot.pdf", 
+       width = 180, height = 225, unit = "mm")
 
 ```
 
@@ -1185,7 +1180,7 @@ map.regions <- regions %>%
             gather(Mobility, Difference, parks, lux)
 
 # define for plotting
-map.regions$mob <- "mob"
+map.regions2$mob <- "mob"
 
 # define for plotting
 map.regions$Mobility <- factor(map.regions$Mobility, levels = c("parks", "lux"))
@@ -1199,7 +1194,7 @@ plot.theme <-  theme_void()+
 # Plot
 ggplot(data = map.regions,
        aes(x = mob, y = Difference, fill = Mobility)) +
-    scale_fill_manual(values = c("#00868B", "#FF6A00"))+
+    scale_fill_manual(values = c("#21908CFF","#FDE725FF"))+
     geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
     geom_hline(yintercept = 0, size = 0.1)+
     facet_wrap(~subregion, strip.position = "bottom")+
@@ -1216,7 +1211,7 @@ map.regions2 <- regions %>%
 
 library(viridis)
 
-ggplot(data = map.regions2,
+bars <- ggplot(data = map.regions2,
        aes(x = mob, y = Difference, fill = Mobility)) +
      scale_fill_viridis(discrete = TRUE, direction = -1)+
     #scale_fill_manual(values = c("#C15CCB","#00868B", "#FF6A00"))+
@@ -1259,21 +1254,39 @@ global_plottheme <- theme_bw(base_size = 15)+ # set the background theme
 
 
 ## Create global plot
-ggplot(google_median, aes(Date, change)) +
+timeplot<- ggplot(google_median, aes(Date, change)) +
   geom_line( aes(colour = type))+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  labs(y = "Change in length of visit (%)")+
+  labs(y = "Change in length \n of visit (%)")+
   #scale_colour_manual(values = c( "#C15CCB","#00868B", "#FF6A00"))+
   scale_colour_viridis(discrete = TRUE)+
   global_plottheme
 
 
 # Save the plot
-ggsave("Parks_grocery_residential.pdf", 
-       dpi = 600, 
-       width = 160, height = 200, unit = "mm")
+ggsave("time plot.pdf", 
+       width = 180, height = 75, unit = "mm")
 
 ```
+
+
+## Combine the plots 
+
+```{r}
+
+library(patchwork)
+
+map.plot / timeplot + plot_layout(height=c(2.5,1))
+
+# Install ggview
+remotes::install_github("idmn/ggview")
+library(ggview)
+ggview(units = "mm", width = 180, height = 150)
+```
+
+
+
+
 
 ## EXPLORING PATTERNS PLOTS
 
