@@ -1164,7 +1164,7 @@ map.plot<- ggplot() +
 
 # Save the plot
 ggsave("map plot.pdf", 
-       width = 180, height = 225, unit = "mm")
+       width = 180, height = 150, unit = "mm")
 
 ```
 
@@ -1208,6 +1208,9 @@ map.regions2 <- regions %>%
                    long, lat)  %>%
             gather(Mobility, Difference, nature:necessities)
 
+library(stringr)
+map.regions2$subregion2 <-str_wrap(map.regions2$subregion, 20)
+
 
 library(viridis)
 
@@ -1217,9 +1220,13 @@ bars <- ggplot(data = map.regions2,
     #scale_fill_manual(values = c("#C15CCB","#00868B", "#FF6A00"))+
     geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
     #geom_hline(yintercept = 0, size = 0.1)+
-    facet_wrap(~subregion, strip.position = "bottom")+
+    facet_wrap(~subregion2, strip.position = "bottom")+
     plot.theme
 
+
+# Save the plot
+ggsave("bars plot.pdf", 
+       width = 150, height = 90, unit = "mm")
 ```
 
 
@@ -1276,12 +1283,12 @@ ggsave("time plot.pdf",
 
 library(patchwork)
 
-map.plot / timeplot + plot_layout(height=c(2.5,1))
+map.plot / timeplot + plot_layout(height=c(2,1))
 
 # Install ggview
 remotes::install_github("idmn/ggview")
 library(ggview)
-ggview(units = "mm", width = 180, height = 150)
+ggview(units = "mm", width = 150, height = 90)
 ```
 
 
