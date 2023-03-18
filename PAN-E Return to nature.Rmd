@@ -11,7 +11,7 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Here we use the Google mobility data to explore the response of people returning to nature after COVID-19 confinements.
+Here we use the Google mobility data to explore the response of people returning to nature after COVID-19 confinements. 
 
 #_______________________
 
@@ -99,7 +99,7 @@ google_countries <- google_countries %>%
 ```
 
 
-## Find the day people were home the most
+## Find the day people were home the most (peak lockdown)
 
 ```{r}
 
@@ -139,7 +139,7 @@ nature <- google_countries %>% group_by(country, ISO3) %>%
 necessities  <- google_countries %>% group_by(country, ISO3) %>% 
             filter(Date > max.home & `Grocery & Pharmacy` > 0) %>%
             summarise(home =  min(max.home), # the date people were home most
-                      necessities_zero = min(Date), # The first date people returned to nature
+                      necessities_zero = min(Date), # The first date people returned to necessities
                       necessities_diff = necessities_zero - home) # calc difference 
 
 
@@ -147,28 +147,17 @@ necessities  <- google_countries %>% group_by(country, ISO3) %>%
 luxuries <- google_countries %>% group_by(country, ISO3) %>% 
             filter(Date > max.home & `Retail & Recreation` > 0) %>%
             summarise(home =  min(max.home), # the date people were home most
-                      luxuries_zero = min(Date), # The first date people returned to nature
+                      luxuries_zero = min(Date), # The first date people returned to luxuries
                       luxuries_diff = luxuries_zero - home) # calc difference 
 
 # Join the dataframes
 returns <- left_join(necessities, luxuries)
 returns <- left_join(returns, nature)
 
-
-# Calculate the differences in days
-returns$naturediff <-  as.numeric(returns$parks_zero - returns$necessities_zero, units = "days")
-returns$luxdiff <- as.numeric(returns$luxuries_zero - returns$necessities_zero, units = "days")
-
-
-# Median global values
-median(returns$naturediff, na.rm = T) # 13 days after necessities
-median(returns$luxdiff, na.rm = T) # 78 after necessities
-
-
 # Global median for return dates
-median(returns$necessities_diff, na.rm = T) # 48 days after necessities
-median(returns$parks_diff, na.rm = T) # 78 after necessities
-median(returns$luxuries_diff, na.rm = T) # 153 after necessities
+median(returns$necessities_diff, na.rm = T) # 48 days after peak lockdown
+median(returns$parks_diff, na.rm = T) # 78 after peak lockdown
+median(returns$luxuries_diff, na.rm = T) # 153 after peak lockdown
 
 ```
 
@@ -320,15 +309,15 @@ ggsave("bars plot.pdf",
 
 
 
-## Global plot for time at parks, pharmacies and luxuries
+## Global plot for time at nature, necessities, luxuries
 
-Here we calculate and plot the global median change of time at parks, pharmacies and luxuries after lockdown.
+Here we calculate and plot the global median change of time at nature, necessities, luxuries after lockdown.
 
 
 ```{r}
 library(dplyr); library(tidyr)
 
-## Calculate global median movement at parks, pharmacies and residential
+## Calculate global median movement at nature, necessities, luxuries
 google_median <- google_countries %>% group_by(Date) %>% 
       summarise(`Parks & Beaches`= median(`Parks & Beaches`, na.rm = TRUE),
                 `Grocery & Pharmacy` = median(`Grocery & Pharmacy`, na.rm = TRUE),
@@ -380,5 +369,6 @@ map.plot / timeplot + plot_layout(height=c(2,1))
 remotes::install_github("idmn/ggview")
 library(ggview)
 ggview(units = "mm", width = 150, height = 90)
+
 ```
 
