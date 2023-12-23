@@ -127,18 +127,46 @@ google_countries$Month <- format(google_countries$Date,"%m")
 google_countries$Month <- format(google_countries$Date,"%m")
 google_countries$Month <- as.numeric(google_countries$Month)
 
+
+# Run GAMM model through the month to remove seasonal trend
 library(mgcv)
-m.lux<-gam(Luxury~ s(Month), random=list(country_region=~1), data=google_countries)
-google_countries$res.Luxury<-residuals(m.lux)
+m.lux<-gamm(Luxury~ s(Month), random=list(country=~1), data=google_countries)
 
-res.Luxury <- data.frame(Luxury = m.lux$model$Luxury, Month = m.lux$model$Month, res.lux = m.lux$residuals)
 
-google_countries2 <- left_join(res.Luxury, google_countries)
+## Change luxury to numeric and country to factor
+google_countries$Luxury <- as.numeric(google_countries$Luxury)
+google_countries$country <- factor(google_countries$country)
 
+# Explore model as GAM
+m.lux2<-gam(Luxury~ s(Month) + s(country, bs="re"), method = "REML", data=google_countries)
+
+
+## Add residuals to the google.countries dataframe
+## There are some NAs in the data, so have to do a couple more steps than just
+## adding the residuals as an additional column
 google_countries2 <- google_countries %>% drop_na(Luxury)
-google_countries2$res.Luxury<-residuals(m.lux)
+google_countries2$res.Luxury<-residuals(m.lux2)
+google_countries <- left_join(google_countries, google_countries2)
 
-google_countries3 <- left_join(google_countries, google_countries2)
+
+# Calculate the mean of Luxury and the model residuals for the first two weeks
+# Then calculate the difference between the means 
+recenter<- google_countries %>% group_by(country) %>%  select(Luxury, res.Luxury) %>% 
+  slice(1:14) %>% summarise(mean.Lux = mean(Luxury),
+                            mean.res = mean(res.Luxury),
+                            diff = mean.res - mean.Lux)
+
+
+# Recenter the residuals based on the difference between the means
+google_countries$recenter.lux <- google_countries$res.Luxury - 4.301263
+
+
+# Plot
+ggplot(google_countries %>% filter(country == "Canada")) +
+  theme_bw()+
+  geom_point(aes(Date, Luxury))+
+    geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)
+   geom_point(aes(Date,recenter.lux),colour = "blue",  alpha = 0.4)
 
 
 
@@ -178,36 +206,8 @@ can$recenter <- can$res.Luxury - 19.80977
 ggplot(can) +
   theme_bw()+
   geom_point(aes(Date, Luxury))+
-    geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
+   geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)
    geom_point(aes(Date,recenter),colour = "blue",  alpha = 0.4)
-
-
-
-# Plot
-ggplot(can) +
-  geom_line(aes(Date, pred))+
-  geom_point(aes(Date, Luxury))+
-  geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,recenter),colour = "blue", alpha = 0.4)
-
-
-
-
-mod <- lm(log(num_encounters) ~ log(distance)*sampling_effort, data=df)
-res <- df$num_encounters - exp(predict(mod))
-
-
-plot(data=can,Luxury~X)
-m1<-gam(Luxury~s(Month),data=can)
-can$res.Luxury<-residuals(m1)
-plot(data=can,res.Luxury~X)
-
-
-
-m1<-gamm(Luxury~s(Month), random=list(country_region=~1), data=can)
-
-## like the burrow code:
-bs = re
 
 
 ```
