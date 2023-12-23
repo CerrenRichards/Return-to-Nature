@@ -51,6 +51,7 @@ library(dplyr)
 # remove the subregions and metro areas and only keep the overall country pattern
 google <- google %>% filter(metro_area == "" & sub_region_1 == "")
 
+
 library(naniar)
 # R reads Namibia's iso2 code is as an "is.na" object, so we will rename it to NA
 google$country_region_code[is.na(google$country_region_code)] <-"NA"
@@ -97,6 +98,120 @@ google_countries <- google_countries %>%
                                             "Guinea-Bissau"))
 
 ```
+
+
+# Detrend data
+```{r}
+
+ # Select the specific data and rename columns
+google_countries <- google %>% select(country, ISO3, Date, 
+                    `Nature`= 
+                     parks_percent_change_from_baseline,
+                    `Necessities` = 
+                     grocery_and_pharmacy_percent_change_from_baseline,
+                     Residential = 
+                     residential_percent_change_from_baseline,
+                    `Luxury` = 
+                      retail_and_recreation_percent_change_from_baseline) 
+
+# Remove countries from google dataframe
+google_countries <- google_countries %>% 
+                     filter(!country %in% c("Hong Kong SAR China", "Mongolia", 
+                                            "South Korea", "Taiwan", "Yemen", 
+                                            "Liechtenstein", "Réunion", "North Macedonia", 
+                                            "Tajikistan", "Antigua & Barbuda", "Aruba", 
+                                            "Guinea-Bissau"))
+
+# Define month
+google_countries$Month <- format(google_countries$Date,"%m")
+google_countries$Month <- format(google_countries$Date,"%m")
+google_countries$Month <- as.numeric(google_countries$Month)
+
+library(mgcv)
+m.lux<-gam(Luxury~ s(Month), random=list(country_region=~1), data=google_countries)
+google_countries$res.Luxury<-residuals(m.lux)
+
+res.Luxury <- data.frame(Luxury = m.lux$model$Luxury, Month = m.lux$model$Month, res.lux = m.lux$residuals)
+
+google_countries2 <- left_join(res.Luxury, google_countries)
+
+google_countries2 <- google_countries %>% drop_na(Luxury)
+google_countries2$res.Luxury<-residuals(m.lux)
+
+google_countries3 <- left_join(google_countries, google_countries2)
+
+
+
+
+
+### TEST WITH CANADA
+can <- read.csv("canada.csv")
+can$Date <- as.POSIXct(can$date, format='%Y-%m-%d')
+can$Month <- format(can$Date,"%m")
+can$Month <- as.numeric(can$Month)
+
+# Model
+m1<-gam(Luxury~s(Month),data=can)
+
+# Calculate residuals
+can$res.Luxury<-residuals(m1)
+
+# Caluclate the difference between Luxury and the model prediction
+# ***This produces the same as the resudual code above***
+pred.m1 <- predict.gam(m1, type="response")
+can$pred <- pred.m1
+can$res <- can$Luxury - can$pred
+
+# Calculate the mean of Luxury and the model residuals for the first two weeks
+# Then calculate the difference between the means 
+can %>% select(Luxury, res.Luxury) %>% 
+  slice(1:14) %>% summarise(mean.Lux = mean(Luxury),
+                            mean.res = mean(res.Luxury),
+                            diff = mean.res - mean.Lux)
+
+
+# Recenter the residuals based on the difference between the means
+can$recenter <- can$res.Luxury - 19.80977
+
+
+# Plot
+ggplot(can) +
+  theme_bw()+
+  geom_point(aes(Date, Luxury))+
+    geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
+   geom_point(aes(Date,recenter),colour = "blue",  alpha = 0.4)
+
+
+
+# Plot
+ggplot(can) +
+  geom_line(aes(Date, pred))+
+  geom_point(aes(Date, Luxury))+
+  geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
+   geom_point(aes(Date,recenter),colour = "blue", alpha = 0.4)
+
+
+
+
+mod <- lm(log(num_encounters) ~ log(distance)*sampling_effort, data=df)
+res <- df$num_encounters - exp(predict(mod))
+
+
+plot(data=can,Luxury~X)
+m1<-gam(Luxury~s(Month),data=can)
+can$res.Luxury<-residuals(m1)
+plot(data=can,res.Luxury~X)
+
+
+
+m1<-gamm(Luxury~s(Month), random=list(country_region=~1), data=can)
+
+## like the burrow code:
+bs = re
+
+
+```
+
 
 
 ## Find the day people were home the most (peak lockdown)
