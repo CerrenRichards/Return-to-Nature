@@ -129,6 +129,7 @@ google_countries$Month <- as.numeric(google_countries$Month)
 
 
 # Run GAMM model through the month to remove seasonal trend
+# ****When running the GAMM - need to add the extra $gam
 library(mgcv)
 m.lux<-gamm(Luxury~ s(Month), random=list(country=~1), data=google_countries)
 
@@ -156,6 +157,8 @@ recenter<- google_countries %>% group_by(country) %>%  select(Luxury, res.Luxury
                             mean.res = mean(res.Luxury),
                             diff = mean.res - mean.Lux)
 
+
+## ****** Stopped Here - update - apply across all countries
 
 # Recenter the residuals based on the difference between the means
 google_countries$recenter.lux <- google_countries$res.Luxury - 4.301263
@@ -323,19 +326,13 @@ returns <- left_join(returns, world_map)
 
 ## Summarise the subregion/continental differences
 regions <- returns %>% group_by(subregion) %>% 
-            summarise(parks = median(naturediff, na.rm = T),
-                      parks.min = min(naturediff, na.rm = T),
-                      parks.max = max(naturediff, na.rm = T),
-                      lux = median(luxdiff, na.rm = T),
-                      lux.min = min(luxdiff, na.rm = T),
-                      lux.max = max(luxdiff, na.rm = T),
-                      nature = median(parks_diff, na.rm = T),
+            summarise(nature = median(parks_diff, na.rm = T),
                       necessities = median(necessities_diff, na.rm = T),
                       luxuries = median(luxuries_diff, na.rm = T),
                       long=mean(long, na.rm = T),
                       lat=mean(lat, na.rm = T),
                       countries = n()) %>%
-            arrange(parks)
+            arrange(nature)
 
 # Save
 write.csv(regions, "regions.csv")
@@ -439,6 +436,9 @@ google_median <- google_countries %>% group_by(Date) %>%
                 `Retail & Recreation` = median(`Retail & Recreation`, na.rm = TRUE))
 
 
+## Add a number column to subsitute for date in the model
+google_median$time <- 1:nrow(google_median)
+
 ## Rearrange for plotting
 google_median <- google_median %>% gather(type, change, `Parks & Beaches`:`Retail & Recreation`)
 
@@ -468,6 +468,17 @@ ggsave("time plot.pdf",
        width = 180, height = 75, unit = "mm")
 
 ```
+
+
+## Test whether duration of time in necessities, nature and luxuries is statistically different over time
+
+```{r}
+
+
+
+
+```
+
 
 
 ## Combine the plots 
