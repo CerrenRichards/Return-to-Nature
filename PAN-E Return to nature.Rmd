@@ -473,9 +473,13 @@ ggsave("time plot.pdf",
 ## Test whether duration of time in necessities, nature and luxuries is statistically different over time
 
 ```{r}
+google_median$type <- as.factor(google_median$type)
 
+m.test<- gam(data = google_median, change~s(time)+s(type, bs="re"))
 
-
+summary(m.test)
+plot(m.test)
+hist(resid(m.test))
 
 ```
 
