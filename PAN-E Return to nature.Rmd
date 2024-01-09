@@ -161,14 +161,14 @@ recenter<- google_countries %>% group_by(country) %>%  select(Luxury, res.Luxury
 ## ****** Stopped Here - update - apply across all countries
 
 # Recenter the residuals based on the difference between the means
-google_countries$recenter.lux <- google_countries$res.Luxury - 4.301263
+google_countries$recenter.lux <- google_countries$res.Luxury - 13.6430597
 
 
 # Plot
 ggplot(google_countries %>% filter(country == "Canada")) +
   theme_bw()+
   geom_point(aes(Date, Luxury))+
-    geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)
+   # geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
    geom_point(aes(Date,recenter.lux),colour = "blue",  alpha = 0.4)
 
 
@@ -209,11 +209,94 @@ can$recenter <- can$res.Luxury - 19.80977
 ggplot(can) +
   theme_bw()+
   geom_point(aes(Date, Luxury))+
-   geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)
+   #geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
    geom_point(aes(Date,recenter),colour = "blue",  alpha = 0.4)
 
 
 ```
+
+## Nature 
+```{r}
+
+
+
+### TEST WITH CANADA
+can <- read.csv("canada.csv")
+can$Date <- as.POSIXct(can$date, format='%Y-%m-%d')
+can$Month <- format(can$Date,"%m")
+can$Month <- as.numeric(can$Month)
+
+# Model
+m2<-gam(Nature~s(Month),data=can)
+
+# Calculate residuals
+can$res.Nature<-residuals(m2)
+
+
+# Calculate the mean of Luxury and the model residuals for the first two weeks
+# Then calculate the difference between the means 
+can %>% select(Nature, res.Nature) %>% 
+  slice(1:14) %>% summarise(mean.nat = mean(Nature),
+                            mean.res = mean(res.Nature),
+                            diff = mean.res - mean.nat)
+
+
+# Recenter the residuals based on the difference between the means
+can$recenter.nat <- can$res.Nat - - 4.548827
+
+
+# Plot
+ggplot(can) +
+  theme_bw()+
+  geom_point(aes(Date, Nature))+
+   #geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
+   geom_point(aes(Date,recenter.nat),colour = "blue",  alpha = 0.4)
+
+
+#### ALL COUNTRIES
+
+
+# Run GAMM model through the month to remove seasonal trend
+# ****When running the GAMM - need to add the extra $gam
+library(mgcv)
+m.nat<-gamm(Nature~ s(Month), random=list(country=~1), data=google_countries)
+
+# Explore model as GAM
+m.nat2<-gam(Nature~ s(Month) + s(country, bs="re"), method = "REML", data=google_countries)
+
+
+## Add residuals to the google.countries dataframe
+## There are some NAs in the data, so have to do a couple more steps than just
+## adding the residuals as an additional column
+google_countries2 <- google_countries %>% drop_na(Nature)
+google_countries2$res.Nature<-residuals(m.nat2)
+google_countries <- left_join(google_countries, google_countries2)
+
+
+# Calculate the mean of Luxury and the model residuals for the first two weeks
+# Then calculate the difference between the means 
+recenter<- google_countries %>% group_by(country) %>%  select(Nature, res.Nature) %>% 
+  slice(1:14) %>% summarise(mean.Nat = mean(Nature),
+                            mean.res = mean(res.Nature),
+                            diff = mean.res - mean.Nat)
+
+
+## ****** Stopped Here - update - apply across all countries
+
+# Recenter the residuals based on the difference between the means
+google_countries$recenter.nat <- google_countries$res.Nature - -50.2580508
+
+
+# Plot
+ggplot(google_countries %>% filter(country == "Canada")) +
+  theme_bw()+
+  geom_point(aes(Date, Nature))+
+   # geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
+   geom_point(aes(Date,recenter.nat),colour = "blue",  alpha = 0.4)
+
+
+```
+
 
 
 
@@ -473,15 +556,117 @@ ggsave("time plot.pdf",
 ## Test whether duration of time in necessities, nature and luxuries is statistically different over time
 
 ```{r}
+## Change to factor for the model to run
 google_median$type <- as.factor(google_median$type)
 
-m.test<- gam(data = google_median, change~s(time)+s(type, bs="re"))
+
+google_median$Month <- format(google_median$Date,"%m")
+google_median$Month <- as.numeric(google_median$Month)
+
+
+m.bam<- bam(data = google_median, change~s(time) + s(type, bs="re"), method = 'REML')
+acf(resid(m.bam))
+
+pacf(resid(m.test))
+
+
+
+m.test<- gam(data = google_median, change~s(scale(time)) + s(type, bs="re"), method = 'REML')
+
+m.test2<- gam(data = google_median, 
+             change~s(time, bs="ts", k = 40) +
+               s(Month, bs = "cc")+
+               s(type, bs="re"), method = 'REML')
+
 
 summary(m.test)
-plot(m.test)
-hist(resid(m.test))
+plot(m.test2)
+hist(resid(m.test2))
+acf(resid(m.test))
+
+
+m.test2<- gamm(data = google_median, 
+              change~s(time),
+              random = list(type = ~1), 
+              corr = corAR1(form = ~ 1|type),
+              method = 'REML')
+
+summary(m.test2$lme)
+plot(m.test2$gam)
+hist(resid(m.test2$gam))
+acf(resid(m.test2$lme, type = "normalized"))
+gam.check(m.test2$gam)
 
 ```
+
+
+```{r}
+
+form <- change ~ s(time) + s(type, bs="re")
+
+
+# Now deal with autocorrelation.
+# First time through with no AR(1) process to get initial rho estimate
+bam0 <- bam(formula = form, data = google_median, method = "REML")
+summary(bam0)
+acf.vals <- acf(residuals(bam0))
+
+# We will use the estimated autocorrelation at lag 1 from the plot as our initial
+# value of rho.
+init.rho <- acf.vals$acf[2]
+
+# Unlike gamm(), we need to explicitly tell bam() about the structure of the 
+# data, that the data for each burrow is 1548 rows long. We create a vector
+# ar.strt to pass as the AR.start parameter to bam(). This vector has a TRUE
+# at the position where each burrow's data starts, that is, every 1548 rows
+# in our case.
+nBurrow <- length(unique(extreme_cold_ATPU$Burrow))
+ar.strt <- rep(c(TRUE, rep(FALSE, (nrow(extreme_cold_ATPU)/nBurrow) - 1)), 
+               length(unique(extreme_cold_ATPU$Burrow)))
+
+# Set up a vector called rho to contain all the values we'd like to try for the
+# autocorrelation parameter. We will try all values from 90% to 110% of the 
+# initial value computed above, with a step of 0.01 between each one.
+# 
+# The idea is to re-run the model with each value of rho and find the 
+# one with the minimum REML score.
+# 
+# The "REML <- " part in the next line is just to initialize REML as a vector
+# of the same length as rho.
+REML <- rho <- seq(from = round(init.rho * 0.9, 2), 
+         to = min(0.99, round(init.rho * 1.1, 2)),
+         by = 0.01)
+# Run each model
+for(i in 1:length(rho)) {
+  message("Doing rho = ", rho[i])
+  bam1_buffer <- bam(
+    formula = form,
+    rho = rho[i],
+    AR.start = ar.strt,
+    data = extreme_cold_ATPU,
+    method = "REML"
+  )
+  REML[i] <- bam1_buffer$gcv.ubre # Save the REML score
+}
+# Now add it to the final model
+bam2_buffer <- bam(
+    formula = form,
+    rho = rho[which.min(REML)],
+    AR.start = ar.strt,
+    data = extreme_cold_ATPU,
+    method = "REML"
+)
+acf(bam2_buffer$std.rsd)
+summary(c)
+AIC(gam1, gam3, gam4)
+summary(gam4)
+plot(bam2_buffer)
+gam.check(bam2_buffer)
+acf(residuals(gam4))
+gam.check(bam2_buffer, pages = 1)
+plot(bam2_buffer, scheme = 2, pages = 1)
+```
+
 
 
 
