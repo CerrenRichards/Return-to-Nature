@@ -100,7 +100,7 @@ google_countries <- google_countries %>%
 ```
 
 
-## Detrend Luxury
+## Detrend Data
 
 ```{r}
 
@@ -241,84 +241,71 @@ ggplot(test) +
 ```
 
 
-## Nature 
+## Run GAM models through the data to describe the trend
+
 ```{r}
 
+## Add a number column to substitute for date in the model
+test <- test %>% group_by(country) %>% mutate(time = 1:n())
 
 
-### TEST WITH CANADA
-can <- read.csv("canada.csv")
-can$Date <- as.POSIXct(can$date, format='%Y-%m-%d')
-can$Month <- format(can$Date,"%m")
-can$Month <- as.numeric(can$Month)
+# Create an empty list to store gam predictions for each country
+# RAW DATA
+predict_lux <- list()
+predict_nat <- list()
+predict_nec <- list()
 
-# Model
-m2<-gam(Nature~s(Month),data=can)
+# DETRENDED DATA (RESIDUALS)
+predict_lux.resid <- list()
+predict_nat.resid <- list()
+predict_nec.resid <- list()
 
-# Calculate residuals
-can$res.Nature<-residuals(m2)
+# Loop through each country
+for (i in unique(test$country)) {
+  
+  # Subset the data for the current country
+  country_data <- subset(test, country == i)
+  
+  # RAW DATA
+  # Fit the GAM models 
+  gam_lux.pred <- gam(Luxury ~ s(time, k = 20), data = country_data)
+  gam_nat.pred <- gam(Nature ~ s(time, k = 20), data = country_data)
+  gam_nec.pred <- gam(Necessities ~ s(time, k = 20), data = country_data)
+  
+  # Extract residuals and store in the lists
+  predict_lux[[i]] <- predict.gam(gam_lux.pred, type="response")
+  predict_nat[[i]] <- predict.gam(gam_nat.pred, type="response")
+  predict_nec[[i]] <- predict.gam(gam_nec.pred, type="response")
+  
+  # DETRENDED DATA
+  # Fit the GAM models 
+  gam_lux.pred.resid <- gam(center.Lux ~ s(time, k = 20), data = country_data)
+  gam_nat.pred.resid <- gam(center.Nat ~ s(time, k = 20), data = country_data)
+  gam_nec.pred.resid <- gam(center.Nec ~ s(time, k = 20), data = country_data)
+  
+  # Extract residuals and store in the lists
+  predict_lux.resid[[i]] <- predict.gam(gam_lux.pred.resid, type="response")
+  predict_nat.resid[[i]] <- predict.gam(gam_nat.pred.resid, type="response")
+  predict_nec.resid[[i]] <- predict.gam(gam_nec.pred.resid, type="response")
+}
 
 
-# Calculate the mean of Luxury and the model residuals for the first two weeks
-# Then calculate the difference between the means 
-can %>% select(Nature, res.Nature) %>% 
-  slice(1:14) %>% summarise(mean.nat = mean(Nature),
-                            mean.res = mean(res.Nature),
-                            diff = mean.res - mean.nat)
+test$Luxury.pred <- unlist(lapply(countries, function(country) predict_lux[[country]]))
 
 
-# Recenter the residuals based on the difference between the means
-can$recenter.nat <- can$res.Nat - - 4.548827
+test$Luxury.pred.resid <- unlist(lapply(countries, function(country) predict_lux.resid[[country]]))
 
 
-# Plot
-ggplot(can) +
+# Plot Luxury
+ggplot(test) +
   theme_bw()+
- # geom_point(aes(Date, Nature))+
-   #geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,recenter.nat),colour = "blue",  alpha = 0.4)
+  geom_point(aes(Date, Luxury))+
+   #geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
+   geom_point(aes(Date,center.Lux),colour = "blue",  alpha = 0.4)+
+  geom_line(aes(Date, Luxury.pred), colour = "red")+
+  geom_line(aes(Date, Luxury.pred.resid), colour = "yellow")+
+  facet_wrap(~country, scales = "free_y")
 
-
-#### ALL COUNTRIES
-
-
-# Run GAMM model through the month to remove seasonal trend
-# ****When running the GAMM - need to add the extra $gam
-library(mgcv)
-m.nat<-gamm(Nature~ s(Month), random=list(country=~1), data=google_countries)
-
-# Explore model as GAM
-m.nat2<-gam(Nature~ s(Month) + s(country, bs="re"), method = "REML", data=google_countries)
-
-
-## Add residuals to the google.countries dataframe
-## There are some NAs in the data, so have to do a couple more steps than just
-## adding the residuals as an additional column
-google_countries2 <- google_countries %>% drop_na(Nature)
-google_countries2$res.Nature<-residuals(m.nat2)
-google_countries <- left_join(google_countries, google_countries2)
-
-
-# Calculate the mean of Luxury and the model residuals for the first two weeks
-# Then calculate the difference between the means 
-recenter<- google_countries %>% group_by(country) %>%  select(Nature, res.Nature) %>% 
-  slice(1:14) %>% summarise(mean.Nat = mean(Nature),
-                            mean.res = mean(res.Nature),
-                            diff = mean.res - mean.Nat)
-
-
-## ****** Stopped Here - update - apply across all countries
-
-# Recenter the residuals based on the difference between the means
-google_countries$recenter.nat <- google_countries$res.Nature - -50.2580508
-
-
-# Plot
-ggplot(google_countries %>% filter(country == "Canada")) +
-  theme_bw()+
-  geom_point(aes(Date, Nature))+
-   # geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,recenter.nat),colour = "blue",  alpha = 0.4)
 
 
 ```
@@ -544,9 +531,6 @@ google_median <- google_countries %>% group_by(Date) %>%
                 `Grocery & Pharmacy` = median(`Grocery & Pharmacy`, na.rm = TRUE),
                 `Retail & Recreation` = median(`Retail & Recreation`, na.rm = TRUE))
 
-
-## Add a number column to subsitute for date in the model
-google_median$time <- 1:nrow(google_median)
 
 ## Rearrange for plotting
 google_median <- google_median %>% gather(type, change, `Parks & Beaches`:`Retail & Recreation`)
