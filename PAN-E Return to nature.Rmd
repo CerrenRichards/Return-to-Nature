@@ -133,34 +133,7 @@ google_countries$Month <- as.numeric(google_countries$Month)
 ## Run a loop to extract the residuals for each country
 
 ## Test loop 
-
 test <- google_countries %>% filter(country %in% c("Canada", "Costa Rica", "Zimbabwe", "Australia"))
-
-
-# Create an empty list to store residuals for each country
-residuals_list <- list()
-
-# Loop through each country
-for (i in unique(test$country)) {
-  
-  # Subset the data for the current country
-  country_data <- subset(test, country == i)
-  
-  # Fit the GAM model
-  gam_model <- gam(Luxury ~ s(Month), data = country_data)
-  
-  # Extract residuals and store in the list
-  residuals_list[[i]] <- residuals(gam_model)
-}
-
-
-# Add residuals back to the original dataframe
-test$res.Luxury <- unlist(lapply(countries, function(country) residuals_list[[country]]))
-
-
-
-
-##**********
 
 
 # Create an empty list to store residuals for each country
@@ -208,33 +181,24 @@ test2$res.Necessities <- unlist(lapply(countries, function(country) residuals_ne
 test <- left_join(test, test2)
 
 
-##**********
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Calculate the mean of Luxury and the model residuals for the first two weeks
+# Calculate the mean of Luxury and the model residuals for the 25 days in the
+# timeseries before the pandemic was declared (Feb 15th - March 11th, 2020)
 # Then calculate the difference between the means 
-recenter<- test %>% group_by(country) %>%  select(Luxury, res.Luxury) %>% 
-  slice(1:25) %>% summarise(mean.Lux = mean(Luxury),
-                            mean.res = mean(res.Luxury),
-                            diff.Lux = mean.res - mean.Lux)%>%
-                  select(country, diff.Lux)
+recenter<- test %>% group_by(country) %>%  select(Luxury, res.Luxury,
+                                                  Nature, res.Nature,
+                                                  Necessities, res.Necessities) %>% 
+  slice(1:25) %>% summarise(mean.Lux = mean(Luxury), # Luxury
+                            mean.res.Lux = mean(res.Luxury),
+                            diff.Lux = mean.res.Lux - mean.Lux,
+                            mean.Nat = mean(Nature), # Nature
+                            mean.res.Nat = mean(res.Nature),
+                            diff.Nat = mean.res.Nat - mean.Nat,
+                            mean.Nec = mean(Necessities), # Necessities
+                            mean.res.Nec = mean(res.Necessities),
+                            diff.Nec = mean.res.Nec - mean.Nec)%>%
+                  select(country, diff.Lux, diff.Nat, diff.Nec)
 
 
 # Join datasets
@@ -242,15 +206,35 @@ test <- left_join(test, recenter)
 
 # Recenter the residuals based on the difference between the means
 test$center.Lux <- test$res.Luxury - test$diff.Lux
+test$center.Nat <- test$res.Nature - test$diff.Nat
+test$center.Nec <- test$res.Necessities - test$diff.Nec
 
 
 
-# Plot
+# Plot Luxury
 ggplot(test) +
   theme_bw()+
   geom_point(aes(Date, Luxury))+
-   geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
+   #geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
    geom_point(aes(Date,center.Lux),colour = "blue",  alpha = 0.4)+
+  facet_wrap(~country, scales = "free_y")
+
+
+# Plot Nature
+ggplot(test) +
+  theme_bw()+
+  geom_point(aes(Date, Nature))+
+   #geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
+   geom_point(aes(Date,center.Nat),colour = "blue",  alpha = 0.4)+
+  facet_wrap(~country, scales = "free_y")
+
+
+# Plot Necessities
+ggplot(test) +
+  theme_bw()+
+  geom_point(aes(Date, Necessities))+
+  # geom_point(aes(Date,res.Necessities),colour = "red", alpha = 0.4)+
+   geom_point(aes(Date,center.Nec),colour = "blue",  alpha = 0.4)+
   facet_wrap(~country, scales = "free_y")
 
 
