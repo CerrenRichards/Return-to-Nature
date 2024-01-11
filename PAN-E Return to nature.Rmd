@@ -155,6 +155,8 @@ for (i in unique(google_countries$country)) {
 }
 
 
+# Extract unique country categories
+countries <- unique(google_countries$country)
 
 # Add residuals back to the original dataframe
 ## There are some NAs in the data, so have to do a couple more steps 
@@ -217,12 +219,12 @@ ggplot(google_countries) +
 
 
 # Plot Nature
-ggplot(google_countries) +
+ggplot(filter(google_countries, country %in% c("United Kingdom", "Canada", "Norway"))) +
   theme_bw()+
   geom_point(aes(Date, Nature))+
    #geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
    geom_point(aes(Date,center.Nat),colour = "blue",  alpha = 0.4)+
-  facet_wrap(~country, scales = "free_y")
+  facet_wrap(~country, scales = "free_y", ncol = 1)
 
 
 # Plot Necessities
@@ -322,14 +324,14 @@ ggplot(google_countries) +
 
 
 # Plot Nature
-ggplot(google_countries) +
+ggplot(filter(google_countries, country %in% c("United Kingdom", "Canada", "Norway"))) +
   theme_bw()+
   geom_point(aes(Date, Nature))+
    #geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
    geom_point(aes(Date,center.Nat),colour = "blue",  alpha = 0.4)+
     geom_line(aes(Date, Nature.pred), colour = "red", size = 1.25)+
   geom_line(aes(Date, Nature.pred.resid), colour = "yellow", size = 1.25)+
-  facet_wrap(~country, scales = "free_y")
+  facet_wrap(~country, scales = "free_y", ncol = 1)
 
 
 # Plot Necessities
@@ -377,7 +379,7 @@ library(tidyverse)
 
 # Nature (Parks and Beaches)
 nature <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & `Parks & Beaches` > 0) %>%
+            filter(Date > max.home & `Nature` > 0) %>%
             summarise(home =  min(max.home), # the date people were home most
                       parks_zero = min(Date), # The first date people returned to nature
                       parks_diff = parks_zero - home) # calc difference 
@@ -408,6 +410,102 @@ median(returns$parks_diff, na.rm = T) # 78 after peak lockdown
 median(returns$luxuries_diff, na.rm = T) # 153 after peak lockdown
 
 ```
+
+
+
+
+## UPDATED Date countries cross zero
+
+```{r}
+library(tidyverse)
+
+## Identify the day that a country's mobility crosses zero
+## and calculate the number of days after lockdown that the 
+## country's mobility crossed zero
+
+## Make four different calculation for the mobility categories to 
+## compare the difference between the raw vs. resid data and gam trend vs. raw data
+
+
+# Nature raw
+nature <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & `Nature` > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      parks_zero = min(Date), # The first date people returned to nature
+                      parks_diff = parks_zero - home) # calc difference 
+
+
+# Nature raw resid
+nature.resid <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & center.Nat > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      parks_zero.resid = min(Date), # The first date people returned to nature
+                      parks_diff.resid = parks_zero.resid - home) # calc difference 
+
+
+# Nature raw resid
+nature.gam <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & Nature.pred > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      parks_zero.gam = min(Date), # The first date people returned to nature
+                      parks_diff.gam = parks_zero.gam - home) # calc difference 
+
+# Nature raw resid
+nature.resid.gam <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & Nature.pred.resid > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      parks_zero.resid.gam = min(Date), # The first date people returned to nature
+                      parks_diff.resid.gam = parks_zero.resid.gam - home) # calc difference 
+
+            
+
+## Join all the nature dataframes
+nature <- left_join(nature, nature.resid)%>%
+          left_join(., nature.gam) %>%
+          left_join(., nature.resid.gam)
+
+
+
+
+
+
+# Necessities (Groceries and pharmacies)
+necessities  <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & `Grocery & Pharmacy` > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      necessities_zero = min(Date), # The first date people returned to necessities
+                      necessities_diff = necessities_zero - home) # calc difference 
+
+
+# Luxuries (Retail & Recreation)
+luxuries <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & `Retail & Recreation` > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      luxuries_zero = min(Date), # The first date people returned to luxuries
+                      luxuries_diff = luxuries_zero - home) # calc difference 
+
+# Join the dataframes
+returns <- left_join(necessities, luxuries)
+returns <- left_join(returns, nature)
+
+# Global median for return dates
+median(returns$necessities_diff, na.rm = T) # 48 days after peak lockdown
+median(returns$parks_diff, na.rm = T) # 78 after peak lockdown
+median(returns$luxuries_diff, na.rm = T) # 153 after peak lockdown
+
+
+
+
+# NATURE
+median(nature$parks_diff, na.rm = T) # 78 after peak lockdown
+median(nature$parks_diff.resid, na.rm = T) # 129 days
+median(nature$parks_diff.gam, na.rm = T) # 93 days
+median(nature$parks_diff.resid.gam, na.rm = T) # 319 days
+
+
+```
+
+
 
 
 # Continental differences
