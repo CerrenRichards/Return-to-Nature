@@ -313,35 +313,35 @@ google_countries <- left_join(google_countries, google_countries2)
 
 
 # Plot Luxury
-ggplot(google_countries) +
+ggplot(filter(google_countries, country %in% c("Australia", "Canada", "Costa Rica", "Zimbabwe"))) +
   theme_bw()+
-  geom_point(aes(Date, Luxury))+
+  geom_point(aes(Date, Luxury), alpha = 0.2)+
    #geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,center.Lux),colour = "blue",  alpha = 0.4)+
-  geom_line(aes(Date, Luxury.pred), colour = "red")+
-  geom_line(aes(Date, Luxury.pred.resid), colour = "yellow")+
+   geom_point(aes(Date,center.Lux),colour = "blue",  alpha = 0.2)+
+  geom_line(aes(Date, Luxury.pred), colour = "black", size = 1.25)+
+  geom_line(aes(Date, Luxury.pred.resid), colour = "blue", size = 1.25)+
   facet_wrap(~country, scales = "free_y")
 
 
 # Plot Nature
-ggplot(filter(google_countries, country %in% c("United Kingdom", "Canada", "Norway"))) +
+ggplot(filter(google_countries, country %in% c("Australia", "Canada", "Costa Rica", "Zimbabwe"))) +
   theme_bw()+
-  geom_point(aes(Date, Nature))+
+  geom_point(aes(Date, Nature), alpha = 0.2)+
    #geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,center.Nat),colour = "blue",  alpha = 0.4)+
-    geom_line(aes(Date, Nature.pred), colour = "red", size = 1.25)+
-  geom_line(aes(Date, Nature.pred.resid), colour = "yellow", size = 1.25)+
-  facet_wrap(~country, scales = "free_y", ncol = 1)
+   geom_point(aes(Date,center.Nat),colour = "blue",  alpha = 0.2)+
+    geom_line(aes(Date, Nature.pred), colour = "black", size = 1.25)+
+  geom_line(aes(Date, Nature.pred.resid), colour = "blue", size = 1.25)+
+  facet_wrap(~country, scales = "free_y")
 
 
 # Plot Necessities
-ggplot(google_countries) +
+ggplot(filter(google_countries, country %in% c("Australia", "Canada", "Costa Rica", "Zimbabwe"))) +
   theme_bw()+
-  geom_point(aes(Date, Necessities))+
+  geom_point(aes(Date, Necessities), alpha = 0.2)+
   # geom_point(aes(Date,res.Necessities),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,center.Nec),colour = "blue",  alpha = 0.4)+
-    geom_line(aes(Date, Necessities.pred), colour = "red", size = 1.25)+
-  geom_line(aes(Date, Necessities.pred.resid), colour = "yellow", size = 1.25)+
+   geom_point(aes(Date,center.Nec),colour = "blue",  alpha = 0.2)+
+    geom_line(aes(Date, Necessities.pred), colour = "black", size = 1.25)+
+  geom_line(aes(Date, Necessities.pred.resid), colour = "blue", size = 1.25)+
   facet_wrap(~country, scales = "free_y")
 
 ```
@@ -469,7 +469,7 @@ Necessities <- google_countries %>% group_by(country, ISO3) %>%
 
 # Necessities raw resid
 Necessities.resid <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & center.Nat > 0) %>%
+            filter(Date > max.home & center.Nec > 0) %>%
             summarise(home =  min(max.home), # the date people were home most
                       Necessities_zero.resid = min(Date), # The first date people returned to Necessities
                       Necessities_diff.resid = Necessities_zero.resid - home) # calc difference 
@@ -503,7 +503,7 @@ Luxury <- google_countries %>% group_by(country, ISO3) %>%
 
 # Luxury raw resid
 Luxury.resid <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & center.Nat > 0) %>%
+            filter(Date > max.home & center.Lux > 0) %>%
             summarise(home =  min(max.home), # the date people were home most
                       Luxury_zero.resid = min(Date), # The first date people returned to Luxury
                       Luxury_diff.resid = Luxury_zero.resid - home) # calc difference 
@@ -543,7 +543,7 @@ returns <- left_join(nature, nature.resid)%>% ## nature
 
 # NECESSITIES
 median(returns$Necessities_diff, na.rm = T) # 48 after peak lockdown
-median(returns$Necessities_diff.resid, na.rm = T) # 129 days
+median(returns$Necessities_diff.resid, na.rm = T) # 77 days
 median(returns$Necessities_diff.gam, na.rm = T) # 136 days
 median(returns$Necessities_diff.resid.gam, na.rm = T) # 318 days
 
@@ -555,7 +555,7 @@ median(returns$nature_diff.resid.gam, na.rm = T) # 319 days
 
 # LUXURY
 median(returns$Luxury_diff, na.rm = T) # 153 after peak lockdown
-median(returns$Luxury_diff.resid, na.rm = T) # 129 days
+median(returns$Luxury_diff.resid, na.rm = T) # 324 days
 median(returns$Luxury_diff.gam, na.rm = T) # 408 days
 median(returns$Luxury_diff.resid.gam, na.rm = T) # 518 days
 
@@ -607,16 +607,36 @@ world_map <- map_data("world") %>%
 # Join the data
 returns <- left_join(returns, world_map)
 
-
+## OLD****************************************************************
 ## Summarise the subregion/continental differences
 regions <- returns %>% group_by(subregion) %>% 
-            summarise(nature = median(parks_diff, na.rm = T),
-                      necessities = median(necessities_diff, na.rm = T),
-                      luxuries = median(luxuries_diff, na.rm = T),
+            summarise(nature = median(nature_diff, na.rm = T),
+                      nature.res = median(nature_diff.resid, na.rm = T),
+                      necessities = median(Necessities_diff, na.rm = T),
+                      necessities.res = median(Necessities_diff.resid, na.rm = T),
+                      luxuries = median(Luxury_diff, na.rm = T),
+                      luxuries.res = median(Luxury_diff.resid, na.rm = T),
                       long=mean(long, na.rm = T),
                       lat=mean(lat, na.rm = T),
                       countries = n()) %>%
             arrange(nature)
+
+
+
+## NEW
+## Summarise the subregion/continental differences
+regions <- returns %>% group_by(subregion) %>% 
+            summarise(nature = median(nature_diff.gam, na.rm = T),
+                      nature.res = median(nature_diff.resid.gam, na.rm = T),
+                      necessities = median(Necessities_diff.gam, na.rm = T),
+                      necessities.res = median(Necessities_diff.resid.gam, na.rm = T),
+                      luxuries = median(Luxury_diff.gam, na.rm = T),
+                      luxuries.res = median(Luxury_diff.resid.gam, na.rm = T),
+                      long=mean(long, na.rm = T),
+                      lat=mean(lat, na.rm = T),
+                      countries = n()) %>%
+            arrange(nature)
+
 
 # Save
 write.csv(regions, "regions.csv")
@@ -702,6 +722,54 @@ bars <- ggplot(data = map.regions,
 ggsave("bars plot.pdf", 
        width = 150, height = 90, unit = "mm")
 ```
+
+## Bar plot residuals
+```{r}
+
+# Gather the data for plotting
+map.regions.res <- regions %>% 
+            select(subregion, countries, 
+                   nature.res, luxuries.res, necessities.res, 
+                   long, lat)  %>%
+            gather(Mobility, Difference, nature.res:necessities.res)
+
+# define for plotting
+map.regions.res$mob <- "mob"
+
+## Set plot theme
+plot.theme <-  theme_void()+
+  theme(legend.title = element_blank(),
+        legend.position="none")
+
+
+## Wrap the text into two lines when names are too long
+library(stringr)
+map.regions.res$subregion2 <-str_wrap(map.regions.res$subregion, 20)
+
+
+library(viridis)
+
+## plot the number of day after peak lockdown
+ ggplot(data = map.regions.res,
+       aes(x = mob, y = Difference, fill = Mobility)) +
+     scale_fill_viridis(discrete = TRUE, direction = -1)+
+    #scale_fill_manual(values = c("#C15CCB","#00868B", "#FF6A00"))+
+    geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
+    #geom_hline(yintercept = 0, size = 0.1)+
+    facet_wrap(~subregion2, strip.position = "bottom")+
+    plot.theme
+
+
+# Save the plot
+ggsave("bars plot.pdf", 
+       width = 150, height = 90, unit = "mm")
+
+
+
+
+```
+
+
 
 
 
