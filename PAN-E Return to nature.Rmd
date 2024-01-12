@@ -426,82 +426,138 @@ library(tidyverse)
 ## Make four different calculation for the mobility categories to 
 ## compare the difference between the raw vs. resid data and gam trend vs. raw data
 
-
+## NATURE
 # Nature raw
 nature <- google_countries %>% group_by(country, ISO3) %>% 
             filter(Date > max.home & `Nature` > 0) %>%
             summarise(home =  min(max.home), # the date people were home most
-                      parks_zero = min(Date), # The first date people returned to nature
-                      parks_diff = parks_zero - home) # calc difference 
+                      nature_zero = min(Date), # The first date people returned to nature
+                      nature_diff = nature_zero - home) # calc difference 
 
 
 # Nature raw resid
 nature.resid <- google_countries %>% group_by(country, ISO3) %>% 
             filter(Date > max.home & center.Nat > 0) %>%
             summarise(home =  min(max.home), # the date people were home most
-                      parks_zero.resid = min(Date), # The first date people returned to nature
-                      parks_diff.resid = parks_zero.resid - home) # calc difference 
+                      nature_zero.resid = min(Date), # The first date people returned to nature
+                      nature_diff.resid = nature_zero.resid - home) # calc difference 
 
 
 # Nature raw resid
 nature.gam <- google_countries %>% group_by(country, ISO3) %>% 
             filter(Date > max.home & Nature.pred > 0) %>%
             summarise(home =  min(max.home), # the date people were home most
-                      parks_zero.gam = min(Date), # The first date people returned to nature
-                      parks_diff.gam = parks_zero.gam - home) # calc difference 
+                      nature_zero.gam = min(Date), # The first date people returned to nature
+                      nature_diff.gam = nature_zero.gam - home) # calc difference 
 
 # Nature raw resid
 nature.resid.gam <- google_countries %>% group_by(country, ISO3) %>% 
             filter(Date > max.home & Nature.pred.resid > 0) %>%
             summarise(home =  min(max.home), # the date people were home most
-                      parks_zero.resid.gam = min(Date), # The first date people returned to nature
-                      parks_diff.resid.gam = parks_zero.resid.gam - home) # calc difference 
+                      nature_zero.resid.gam = min(Date), # The first date people returned to nature
+                      nature_diff.resid.gam = nature_zero.resid.gam - home) # calc difference 
 
-            
 
+## NECESSITIES
+# Necessities raw
+Necessities <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & `Necessities` > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      Necessities_zero = min(Date), # The first date people returned to Necessities
+                      Necessities_diff = Necessities_zero - home) # calc difference 
+
+
+# Necessities raw resid
+Necessities.resid <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & center.Nat > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      Necessities_zero.resid = min(Date), # The first date people returned to Necessities
+                      Necessities_diff.resid = Necessities_zero.resid - home) # calc difference 
+
+
+# Necessities raw resid
+Necessities.gam <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & Necessities.pred > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      Necessities_zero.gam = min(Date), # The first date people returned to Necessities
+                      Necessities_diff.gam = Necessities_zero.gam - home) # calc difference 
+
+# Necessities raw resid
+Necessities.resid.gam <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & Necessities.pred.resid > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      Necessities_zero.resid.gam = min(Date), # The first date people returned to Necessities
+                      Necessities_diff.resid.gam = Necessities_zero.resid.gam - home) # calc difference 
+
+
+
+
+## LUXURY
+# Luxury raw
+Luxury <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & `Luxury` > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      Luxury_zero = min(Date), # The first date people returned to Luxury
+                      Luxury_diff = Luxury_zero - home) # calc difference 
+
+
+# Luxury raw resid
+Luxury.resid <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & center.Nat > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      Luxury_zero.resid = min(Date), # The first date people returned to Luxury
+                      Luxury_diff.resid = Luxury_zero.resid - home) # calc difference 
+
+
+# Luxury raw resid
+Luxury.gam <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & Luxury.pred > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      Luxury_zero.gam = min(Date), # The first date people returned to Luxury
+                      Luxury_diff.gam = Luxury_zero.gam - home) # calc difference 
+
+# Luxury raw resid
+Luxury.resid.gam <- google_countries %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & Luxury.pred.resid > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      Luxury_zero.resid.gam = min(Date), # The first date people returned to Luxury
+                      Luxury_diff.resid.gam = Luxury_zero.resid.gam - home) # calc difference 
+
+
+## Join all data
 ## Join all the nature dataframes
-nature <- left_join(nature, nature.resid)%>%
+returns <- left_join(nature, nature.resid)%>% ## nature
           left_join(., nature.gam) %>%
-          left_join(., nature.resid.gam)
+          left_join(., nature.resid.gam) %>%
+          left_join(., Luxury) %>% ## luxury
+          left_join(., Luxury.resid) %>%
+          left_join(., Luxury.gam) %>%
+          left_join(., Luxury.resid.gam) %>%
+          left_join(., Necessities) %>% ## necessities
+          left_join(., Necessities.resid) %>%
+          left_join(., Necessities.gam) %>%
+          left_join(., Necessities.resid.gam)
 
-
-
-
-
-
-# Necessities (Groceries and pharmacies)
-necessities  <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & `Grocery & Pharmacy` > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      necessities_zero = min(Date), # The first date people returned to necessities
-                      necessities_diff = necessities_zero - home) # calc difference 
-
-
-# Luxuries (Retail & Recreation)
-luxuries <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & `Retail & Recreation` > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      luxuries_zero = min(Date), # The first date people returned to luxuries
-                      luxuries_diff = luxuries_zero - home) # calc difference 
-
-# Join the dataframes
-returns <- left_join(necessities, luxuries)
-returns <- left_join(returns, nature)
 
 # Global median for return dates
-median(returns$necessities_diff, na.rm = T) # 48 days after peak lockdown
-median(returns$parks_diff, na.rm = T) # 78 after peak lockdown
-median(returns$luxuries_diff, na.rm = T) # 153 after peak lockdown
 
-
-
+# NECESSITIES
+median(returns$Necessities_diff, na.rm = T) # 48 after peak lockdown
+median(returns$Necessities_diff.resid, na.rm = T) # 129 days
+median(returns$Necessities_diff.gam, na.rm = T) # 136 days
+median(returns$Necessities_diff.resid.gam, na.rm = T) # 318 days
 
 # NATURE
-median(nature$parks_diff, na.rm = T) # 78 after peak lockdown
-median(nature$parks_diff.resid, na.rm = T) # 129 days
-median(nature$parks_diff.gam, na.rm = T) # 93 days
-median(nature$parks_diff.resid.gam, na.rm = T) # 319 days
+median(returns$nature_diff, na.rm = T) # 76 after peak lockdown
+median(returns$nature_diff.resid, na.rm = T) # 129 days
+median(returns$nature_diff.gam, na.rm = T) # 93 days
+median(returns$nature_diff.resid.gam, na.rm = T) # 319 days
 
+# LUXURY
+median(returns$Luxury_diff, na.rm = T) # 153 after peak lockdown
+median(returns$Luxury_diff.resid, na.rm = T) # 129 days
+median(returns$Luxury_diff.gam, na.rm = T) # 408 days
+median(returns$Luxury_diff.resid.gam, na.rm = T) # 518 days
 
 ```
 
