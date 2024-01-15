@@ -482,20 +482,20 @@ returns <- left_join(nature, nature.resid)%>% ## nature
 # NECESSITIES
 median(returns$Necessities_diff, na.rm = T) # 48 after peak lockdown
 median(returns$Necessities_diff.resid, na.rm = T) # 77 days
-median(returns$Necessities_diff.gam, na.rm = T) # 136 days
-median(returns$Necessities_diff.resid.gam, na.rm = T) # 318 days
+median(returns$Necessities_diff.gam, na.rm = T) # 106 days
+median(returns$Necessities_diff.resid.gam, na.rm = T) # 313 days
 
 # NATURE
 median(returns$nature_diff, na.rm = T) # 76 after peak lockdown
 median(returns$nature_diff.resid, na.rm = T) # 129 days
-median(returns$nature_diff.gam, na.rm = T) # 93 days
-median(returns$nature_diff.resid.gam, na.rm = T) # 319 days
+median(returns$nature_diff.gam, na.rm = T) # 97 days
+median(returns$nature_diff.resid.gam, na.rm = T) # 259 days
 
 # LUXURY
 median(returns$Luxury_diff, na.rm = T) # 153 after peak lockdown
 median(returns$Luxury_diff.resid, na.rm = T) # 324 days
-median(returns$Luxury_diff.gam, na.rm = T) # 408 days
-median(returns$Luxury_diff.resid.gam, na.rm = T) # 518 days
+median(returns$Luxury_diff.gam, na.rm = T) # 398 days
+median(returns$Luxury_diff.resid.gam, na.rm = T) # 513 days
 
 ```
 
@@ -545,9 +545,10 @@ world_map <- map_data("world") %>%
 # Join the data
 returns <- left_join(returns, world_map)
 
-## OLD****************************************************************
+
+## Pulse back
 ## Summarise the subregion/continental differences
-regions <- returns %>% group_by(subregion) %>% 
+regions.pulse <- returns %>% group_by(subregion) %>% 
             summarise(nature = median(nature_diff, na.rm = T),
                       nature.res = median(nature_diff.resid, na.rm = T),
                       necessities = median(Necessities_diff, na.rm = T),
@@ -561,9 +562,9 @@ regions <- returns %>% group_by(subregion) %>%
 
 
 
-## NEW
+## Overall net trend
 ## Summarise the subregion/continental differences
-regions <- returns %>% group_by(subregion) %>% 
+regions.trend <- returns %>% group_by(subregion) %>% 
             summarise(nature = median(nature_diff.gam, na.rm = T),
                       nature.res = median(nature_diff.resid.gam, na.rm = T),
                       necessities = median(Necessities_diff.gam, na.rm = T),
@@ -577,7 +578,8 @@ regions <- returns %>% group_by(subregion) %>%
 
 
 # Save
-write.csv(regions, "regions.csv")
+write.csv(regions.pulse, "regions_pulse.csv")
+write.csv(regions.trend, "regions_trend.csv")
 
 ## Colour countries that we have used
 # Set colors
@@ -605,7 +607,7 @@ map.plot<- ggplot() +
      maptheme+
     geom_sf(data = world, aes(fill = fill), colour = "cornsilk", size = 0.01) +
     scale_fill_manual(values = c("cornsilk", "snow3"))+
-    geom_point(data = regions, 
+    geom_point(data = regions.pulse, 
                aes(x = long, y = lat),
                shape=21)+
     coord_sf(xlim = c(-180, 220), ylim = c(-65, 120), expand = FALSE)
@@ -618,12 +620,12 @@ ggsave("map plot.pdf",
 
 ```
 
-## Bar plots of regional trends
+## Bar plots of regional trends - Pulse back - Raw data
 
 ```{r}
 
 # Gather the data for plotting
-map.regions <- regions %>% 
+map.regions <- regions.pulse %>% 
             select(subregion, countries, 
                    nature, luxuries, necessities, 
                    long, lat)  %>%
@@ -649,23 +651,22 @@ library(viridis)
 bars <- ggplot(data = map.regions,
        aes(x = mob, y = Difference, fill = Mobility)) +
      scale_fill_viridis(discrete = TRUE, direction = -1)+
-    #scale_fill_manual(values = c("#C15CCB","#00868B", "#FF6A00"))+
     geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
-    #geom_hline(yintercept = 0, size = 0.1)+
     facet_wrap(~subregion2, strip.position = "bottom")+
     plot.theme
 
 
 # Save the plot
-ggsave("bars plot.pdf", 
+ggsave("bars_plot_pulse_raw.pdf", 
        width = 150, height = 90, unit = "mm")
 ```
 
-## Bar plot residuals
+## Bar plot - Pulse back - Detrended seasonal data
+
 ```{r}
 
 # Gather the data for plotting
-map.regions.res <- regions %>% 
+map.regions.res <- regions.pulse %>% 
             select(subregion, countries, 
                    nature.res, luxuries.res, necessities.res, 
                    long, lat)  %>%
@@ -674,40 +675,88 @@ map.regions.res <- regions %>%
 # define for plotting
 map.regions.res$mob <- "mob"
 
-## Set plot theme
-plot.theme <-  theme_void()+
-  theme(legend.title = element_blank(),
-        legend.position="none")
-
-
 ## Wrap the text into two lines when names are too long
-library(stringr)
 map.regions.res$subregion2 <-str_wrap(map.regions.res$subregion, 20)
 
-
-library(viridis)
 
 ## plot the number of day after peak lockdown
  ggplot(data = map.regions.res,
        aes(x = mob, y = Difference, fill = Mobility)) +
      scale_fill_viridis(discrete = TRUE, direction = -1)+
-    #scale_fill_manual(values = c("#C15CCB","#00868B", "#FF6A00"))+
     geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
-    #geom_hline(yintercept = 0, size = 0.1)+
     facet_wrap(~subregion2, strip.position = "bottom")+
     plot.theme
 
 
 # Save the plot
-ggsave("bars plot.pdf", 
+ggsave("bars_plot_pulse_resid.pdf", 
        width = 150, height = 90, unit = "mm")
-
-
-
 
 ```
 
+## Bar plots of regional trends - overall trend - Raw gam
 
+```{r}
+
+# Gather the data for plotting
+map.regions.trend <- regions.trend %>% 
+            select(subregion, countries, 
+                   nature, luxuries, necessities, 
+                   long, lat)  %>%
+            gather(Mobility, Difference, nature:necessities)
+
+# define for plotting
+map.regions.trend$mob <- "mob"
+
+## Wrap the text into two lines when names are too long
+map.regions.trend$subregion2 <-str_wrap(map.regions.trend$subregion, 20)
+
+## plot the number of day after peak lockdown
+ggplot(data = map.regions.trend,
+       aes(x = mob, y = Difference, fill = Mobility)) +
+     scale_fill_viridis(discrete = TRUE, direction = -1)+
+    geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
+    facet_wrap(~subregion2, strip.position = "bottom")+
+    plot.theme
+
+
+# Save the plot
+ggsave("bars_plot_pulse_raw.pdf", 
+       width = 150, height = 90, unit = "mm")
+```
+
+## Bar plot - Pulse back - Detrended seasonal data
+
+```{r}
+
+# Gather the data for plotting
+map.regions.res.trend <- regions.trend %>% 
+            select(subregion, countries, 
+                   nature.res, luxuries.res, necessities.res, 
+                   long, lat)  %>%
+            gather(Mobility, Difference, nature.res:necessities.res)
+
+# define for plotting
+map.regions.res.trend$mob <- "mob"
+
+## Wrap the text into two lines when names are too long
+map.regions.res.trend$subregion2 <-str_wrap(map.regions.res.trend$subregion, 20)
+
+
+## plot the number of day after peak lockdown
+ ggplot(data = map.regions.res.trend,
+       aes(x = mob, y = Difference, fill = Mobility)) +
+     scale_fill_viridis(discrete = TRUE, direction = -1)+
+    geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
+    facet_wrap(~subregion2, strip.position = "bottom")+
+    plot.theme
+
+
+# Save the plot
+ggsave("bars_plot_pulse_resid.pdf", 
+       width = 150, height = 90, unit = "mm")
+
+```
 
 
 
@@ -721,13 +770,13 @@ library(dplyr); library(tidyr)
 
 ## Calculate global median movement at nature, necessities, luxuries
 google_median <- google_countries %>% group_by(Date) %>% 
-      summarise(`Parks & Beaches`= median(`Parks & Beaches`, na.rm = TRUE),
-                `Grocery & Pharmacy` = median(`Grocery & Pharmacy`, na.rm = TRUE),
-                `Retail & Recreation` = median(`Retail & Recreation`, na.rm = TRUE))
+      summarise(Nature = median(Nature, na.rm = TRUE),
+                Necessities = median(Necessities, na.rm = TRUE),
+                Luxury = median(Luxury, na.rm = TRUE))
 
 
 ## Rearrange for plotting
-google_median <- google_median %>% gather(type, change, `Parks & Beaches`:`Retail & Recreation`)
+google_median <- google_median %>% gather(type, change, Nature:Luxury)
 
 ## Define plot theme
 global_plottheme <- theme_bw(base_size = 15)+ # set the background theme       
@@ -745,8 +794,7 @@ timeplot<- ggplot(google_median, aes(Date, change)) +
   geom_line( aes(colour = type))+
   geom_hline(yintercept = 0, linetype = "dashed")+
   labs(y = "Change in length \n of visit (%)")+
-  #scale_colour_manual(values = c( "#C15CCB","#00868B", "#FF6A00"))+
-  scale_colour_viridis(discrete = TRUE)+
+  scale_colour_viridis(discrete = TRUE, direction = -1)+
   global_plottheme
 
 
