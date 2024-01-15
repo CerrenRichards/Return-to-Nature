@@ -69,13 +69,13 @@ google$Date <- as.POSIXct(google$date, format='%Y-%m-%d')
 
 # Select the specific data and rename columns
 google_countries <- google %>% select(country, ISO3, Date, 
-                    `Parks & Beaches`= 
+                    `Nature`= 
                      parks_percent_change_from_baseline,
-                    `Grocery & Pharmacy` = 
+                    `Necessities` = 
                      grocery_and_pharmacy_percent_change_from_baseline,
                      Residential = 
                      residential_percent_change_from_baseline,
-                    `Retail & Recreation` = 
+                    `Luxury` = 
                       retail_and_recreation_percent_change_from_baseline) 
 
 ```
@@ -103,25 +103,6 @@ google_countries <- google_countries %>%
 ## Detrend Data
 
 ```{r}
-
-# Select the specific data and rename columns
-google_countries <- google %>% select(country, ISO3, Date, 
-                    `Nature`= 
-                     parks_percent_change_from_baseline,
-                    `Necessities` = 
-                     grocery_and_pharmacy_percent_change_from_baseline,
-                     Residential = 
-                     residential_percent_change_from_baseline,
-                    `Luxury` = 
-                      retail_and_recreation_percent_change_from_baseline) 
-
-# Remove countries from google dataframe
-google_countries <- google_countries %>% 
-                     filter(!country %in% c("Hong Kong SAR China", "Mongolia", 
-                                            "South Korea", "Taiwan", "Yemen", 
-                                            "Liechtenstein", "Réunion", "North Macedonia", 
-                                            "Tajikistan", "Antigua & Barbuda", "Aruba", 
-                                            "Guinea-Bissau"))
 
 # Define month
 google_countries$Month <- format(google_countries$Date,"%m")
@@ -239,7 +220,7 @@ ggplot(google_countries) +
 ```
 
 
-## Run GAM models through the data to describe the trend
+## Run GAM models through the data to describe the overall net trend
 
 ```{r}
 
@@ -265,20 +246,22 @@ for (i in unique(google_countries$country)) {
   
   # RAW DATA
   # Fit the GAM models 
-  gam_lux.pred <- gam(Luxury ~ s(time, k = 20), data = country_data)
-  gam_nat.pred <- gam(Nature ~ s(time, k = 20), data = country_data)
-  gam_nec.pred <- gam(Necessities ~ s(time, k = 20), data = country_data)
+  # k = 30 for the number of months in the dataset
+  gam_lux.pred <- gam(Luxury ~ s(time, k = 30), data = country_data)
+  gam_nat.pred <- gam(Nature ~ s(time, k = 30), data = country_data)
+  gam_nec.pred <- gam(Necessities ~ s(time, k = 30), data = country_data)
   
-  # Extract gam trend and store in the lists
+  # Extract GAM trend line and store in the lists
+  # This gives the overall net trend 
   predict_lux[[i]] <- predict.gam(gam_lux.pred, type="response")
   predict_nat[[i]] <- predict.gam(gam_nat.pred, type="response")
   predict_nec[[i]] <- predict.gam(gam_nec.pred, type="response")
   
   # DETRENDED DATA
   # Fit the GAM models 
-  gam_lux.pred.resid <- gam(center.Lux ~ s(time, k = 20), data = country_data)
-  gam_nat.pred.resid <- gam(center.Nat ~ s(time, k = 20), data = country_data)
-  gam_nec.pred.resid <- gam(center.Nec ~ s(time, k = 20), data = country_data)
+  gam_lux.pred.resid <- gam(center.Lux ~ s(time, k = 30), data = country_data)
+  gam_nat.pred.resid <- gam(center.Nat ~ s(time, k = 30), data = country_data)
+  gam_nec.pred.resid <- gam(center.Nec ~ s(time, k = 30), data = country_data)
   
   # Extract gam trends and store in the lists
   predict_lux.resid[[i]] <- predict.gam(gam_lux.pred.resid, type="response")
@@ -368,53 +351,8 @@ google_countries <- left_join(google_countries, home)
 
 ```
 
+
 ## Date countries cross zero
-
-```{r}
-library(tidyverse)
-
-## Identify the day that a country's mobility crosses zero
-## and calculate the number of days after lockdown that the 
-## country's mobility crossed zero
-
-# Nature (Parks and Beaches)
-nature <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & `Nature` > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      parks_zero = min(Date), # The first date people returned to nature
-                      parks_diff = parks_zero - home) # calc difference 
-            
-
-# Necessities (Groceries and pharmacies)
-necessities  <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & `Grocery & Pharmacy` > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      necessities_zero = min(Date), # The first date people returned to necessities
-                      necessities_diff = necessities_zero - home) # calc difference 
-
-
-# Luxuries (Retail & Recreation)
-luxuries <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & `Retail & Recreation` > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      luxuries_zero = min(Date), # The first date people returned to luxuries
-                      luxuries_diff = luxuries_zero - home) # calc difference 
-
-# Join the dataframes
-returns <- left_join(necessities, luxuries)
-returns <- left_join(returns, nature)
-
-# Global median for return dates
-median(returns$necessities_diff, na.rm = T) # 48 days after peak lockdown
-median(returns$parks_diff, na.rm = T) # 78 after peak lockdown
-median(returns$luxuries_diff, na.rm = T) # 153 after peak lockdown
-
-```
-
-
-
-
-## UPDATED Date countries cross zero
 
 ```{r}
 library(tidyverse)
