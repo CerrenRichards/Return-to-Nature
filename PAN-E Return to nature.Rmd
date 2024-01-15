@@ -560,6 +560,9 @@ regions.pulse <- returns %>% group_by(subregion) %>%
                       countries = n()) %>%
             arrange(nature)
 
+## Change Melanesia coordianates 
+regions.pulse[9, 9] <- -9.940104 # lat
+regions.pulse[9, 8] <- 149.465633 # long
 
 
 ## Overall net trend
@@ -588,18 +591,9 @@ world <- mutate(world, fill = ifelse(ISO3 %in% returns$ISO3,
 
 
 ## Set the map theme
-maptheme <-  theme_bw(base_size = 15)+
-  theme(axis.title.y = element_blank(), 
-        axis.title.x = element_blank(),
-        panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        legend.title = element_blank(),
-        legend.position="none",
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank(),
-        axis.text.y=element_blank(),
-        axis.ticks.y=element_blank())
-
+maptheme <-  theme_void()+
+  theme(legend.title = element_blank(),
+        legend.position="none")
 
 # World map with dots for locations
 map.plot<- ggplot() +
@@ -634,15 +628,16 @@ map.regions <- regions.pulse %>%
 # define for plotting
 map.regions$mob <- "mob"
 
-## Set plot theme
-plot.theme <-  theme_void()+
+
+## Set plot theme with y axis
+plot.theme <-  theme_classic()+
   theme(legend.title = element_blank(),
-        legend.position="none")
-
-
-## Wrap the text into two lines when names are too long
-library(stringr)
-map.regions$subregion2 <-str_wrap(map.regions$subregion, 20)
+        legend.position="none",
+        strip.background = element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
 
 
 library(viridis)
@@ -651,10 +646,10 @@ library(viridis)
 bars <- ggplot(data = map.regions,
        aes(x = mob, y = Difference, fill = Mobility)) +
      scale_fill_viridis(discrete = TRUE, direction = -1)+
-    geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
-    facet_wrap(~subregion2, strip.position = "bottom")+
-    plot.theme
-
+    geom_bar(stat= "identity",width = 0.1, position = position_dodge(0.12))+
+    facet_wrap(~subregion, strip.position = "bottom")+
+    plot.theme+
+    scale_x_discrete(expand = c(0.07,0))
 
 # Save the plot
 ggsave("bars_plot_pulse_raw.pdf", 
@@ -675,17 +670,14 @@ map.regions.res <- regions.pulse %>%
 # define for plotting
 map.regions.res$mob <- "mob"
 
-## Wrap the text into two lines when names are too long
-map.regions.res$subregion2 <-str_wrap(map.regions.res$subregion, 20)
-
-
 ## plot the number of day after peak lockdown
  ggplot(data = map.regions.res,
        aes(x = mob, y = Difference, fill = Mobility)) +
      scale_fill_viridis(discrete = TRUE, direction = -1)+
-    geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
-    facet_wrap(~subregion2, strip.position = "bottom")+
-    plot.theme
+    geom_bar(stat= "identity",width = 0.1, position = position_dodge(0.12))+
+    facet_wrap(~subregion, strip.position = "bottom")+
+    plot.theme+
+    scale_x_discrete(expand = c(0.07,0))
 
 
 # Save the plot
@@ -708,16 +700,14 @@ map.regions.trend <- regions.trend %>%
 # define for plotting
 map.regions.trend$mob <- "mob"
 
-## Wrap the text into two lines when names are too long
-map.regions.trend$subregion2 <-str_wrap(map.regions.trend$subregion, 20)
-
 ## plot the number of day after peak lockdown
 ggplot(data = map.regions.trend,
        aes(x = mob, y = Difference, fill = Mobility)) +
      scale_fill_viridis(discrete = TRUE, direction = -1)+
-    geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
-    facet_wrap(~subregion2, strip.position = "bottom")+
-    plot.theme
+    geom_bar(stat= "identity",width = 0.1, position = position_dodge(0.12))+
+    facet_wrap(~subregion, strip.position = "bottom")+
+    plot.theme+
+    scale_x_discrete(expand = c(0.07,0))
 
 
 # Save the plot
@@ -739,17 +729,15 @@ map.regions.res.trend <- regions.trend %>%
 # define for plotting
 map.regions.res.trend$mob <- "mob"
 
-## Wrap the text into two lines when names are too long
-map.regions.res.trend$subregion2 <-str_wrap(map.regions.res.trend$subregion, 20)
-
 
 ## plot the number of day after peak lockdown
  ggplot(data = map.regions.res.trend,
        aes(x = mob, y = Difference, fill = Mobility)) +
      scale_fill_viridis(discrete = TRUE, direction = -1)+
-    geom_bar(stat= "identity",width = 0.3, position = position_dodge(0.35))+
-    facet_wrap(~subregion2, strip.position = "bottom")+
-    plot.theme
+    geom_bar(stat= "identity",width = 0.1, position = position_dodge(0.12))+
+    facet_wrap(~subregion, strip.position = "bottom")+
+    plot.theme+
+    scale_x_discrete(expand = c(0.07,0))
 
 
 # Save the plot
@@ -803,8 +791,6 @@ ggsave("time plot.pdf",
        width = 180, height = 75, unit = "mm")
 
 ```
-
-
 
 
 ## Combine the plots 
