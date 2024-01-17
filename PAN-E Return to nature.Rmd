@@ -66,7 +66,6 @@ google$country <- countrycode(google$ISO2, origin = 'iso2c', destination = 'coun
 # Set the date as POSIXct
 google$Date <- as.POSIXct(google$date, format='%Y-%m-%d')
 
-
 # Select the specific data and rename columns
 google_countries <- google %>% select(country, ISO3, Date, 
                     `Nature`= 
@@ -206,6 +205,14 @@ ggplot(filter(google_countries, country %in% c("United Kingdom", "Canada", "Norw
    #geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
    geom_point(aes(Date,center.Nat),colour = "blue",  alpha = 0.4)+
   facet_wrap(~country, scales = "free_y", ncol = 1)
+
+
+ggplot(filter(test, subregion == "Melanesia")) +
+  theme_bw()+
+  geom_point(aes(Date, Nature))+
+   #geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
+   geom_point(aes(Date,center.Nat),colour = "blue",  alpha = 0.4)+
+  facet_wrap(~country, scales = "free_y")
 
 
 # Plot Necessities
@@ -476,7 +483,6 @@ returns <- left_join(nature, nature.resid)%>% ## nature
           left_join(., Necessities.gam) %>%
           left_join(., Necessities.resid.gam)
 
-
 # Global median for return dates
 
 # NECESSITIES
@@ -677,7 +683,7 @@ map.regions.res$mob <- "mob"
        aes(x = mob, y = Difference, fill = Mobility)) +
      scale_fill_viridis(discrete = TRUE, direction = -1)+
     geom_bar(stat= "identity",width = 0.1, position = position_dodge(0.12))+
-    facet_wrap(~subregion, strip.position = "bottom")+
+    facet_wrap(~subregion, strip.position = "bottom", scale = "free_y")+
     plot.theme+
     scale_x_discrete(expand = c(0.07,0))
 
@@ -811,4 +817,77 @@ library(ggview)
 ggview(units = "mm", width = 150, height = 90)
 
 ```
+
+
+## Explore confinement differences
+
+```{r}
+library(RCurl)
+library(dplyr)
+
+## Load in confinement data
+x <- getURL("https://raw.githubusercontent.com/OxCGRT/covid-policy-dataset/main/data/OxCGRT_simplified_v1.csv")
+
+confinement <- read.csv(text = x)
+
+# Subset data
+
+confinement <- confinement %>% select(ISO3=CountryCode,CountryName:Date,
+                                      C1M_combined_numeric:C8EV_combined,
+                                      StringencyIndex_Average, GovernmentResponseIndex_Average)
+
+confinement <- confinement %>% filter(Jurisdiction == "NAT_TOTAL")
+
+
+# Set the date as POSIXct
+confinement$Date <- as.character(confinement$Date)
+confinement$Date <- as.POSIXct(confinement$Date, format='%Y%m%d')
+
+
+
+# Join the Google data with the confinement data
+# This results in more obs. than googlesub because 'parks' and 'residential' have different countries
+googleconf <- left_join(google_countries, confinement, by = c("ISO3", "Date"))
+
+
+## NATURE
+# Nature raw
+nature.conf <- googleconf %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & `Nature` > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      nature_zero = min(Date), # The first date people returned to nature
+                      nature_diff = nature_zero - home,
+                      stringency = median(StringencyIndex_Average),
+                      gov.index = median(GovernmentResponseIndex_Average)) # calc difference 
+
+subregion <- returns %>% select(ISO3, country, subregion)
+
+nature.conf <- left_join(nature.conf, subregion)
+
+plot(nature.conf$gov.index, nature.conf$subregion)
+
+ggplot(nature.conf)+
+  geom_boxplot(aes(subregion, gov.index))
+
+sum.conf<- nature.conf %>% 
+  group_by(subregion) %>% summarise(stringency = median(stringency),
+                      gov.index = median(gov.index),
+                      nature = median(nature_diff))
+
+
+
+
+regions.trend <- returns %>% group_by(subregion) %>% 
+            summarise(nature = median(nature_diff.gam, na.rm = T),
+                      nature.res = median(nature_diff.resid.gam, na.rm = T),
+                      necessities = median(Necessities_diff.gam, na.rm = T),
+                      necessities.res = median(Necessities_diff.resid.gam, na.rm = T),
+                      luxuries = median(Luxury_diff.gam, na.rm = T),
+                      luxuries.res = median(Luxury_diff.resid.gam, na.rm = T),
+                      long=mean(long, na.rm = T),
+                      lat=mean(lat, na.rm = T),
+                      countries = n()) %>%
+            arrange(nature)
+```
+
 
