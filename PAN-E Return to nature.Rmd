@@ -102,6 +102,7 @@ google_countries <- google_countries %>%
 ## Detrend Data
 
 ```{r}
+library(mgcv)
 
 # Define month
 google_countries$Month <- format(google_countries$Date,"%m")
@@ -483,6 +484,7 @@ returns <- left_join(nature, nature.resid)%>% ## nature
           left_join(., Necessities.gam) %>%
           left_join(., Necessities.resid.gam)
 
+
 # Global median for return dates
 
 # NECESSITIES
@@ -821,6 +823,8 @@ ggview(units = "mm", width = 150, height = 90)
 
 ## Explore confinement differences
 
+The intensity of government measures in the period between peak lockdown and the pulse back to nature for each country
+
 ```{r}
 library(RCurl)
 library(dplyr)
@@ -860,34 +864,49 @@ nature.conf <- googleconf %>% group_by(country, ISO3) %>%
                       stringency = median(StringencyIndex_Average),
                       gov.index = median(GovernmentResponseIndex_Average)) # calc difference 
 
+
+
+# Nature raw resid
+nature.conf.resid <- googleconf %>% group_by(country, ISO3) %>% 
+            filter(Date > max.home & center.Nat > 0) %>%
+            summarise(home =  min(max.home), # the date people were home most
+                      nature_zero.resid = min(Date), # The first date people returned to nature
+                      nature_diff.resid = nature_zero.resid - home,
+                      stringency.resid = median(StringencyIndex_Average),
+                      gov.index.resid = median(GovernmentResponseIndex_Average)) # calc difference 
+  
+  
+nature.conf <- left_join(nature.conf, nature.conf.resid)
+  
+
+
 subregion <- returns %>% select(ISO3, country, subregion)
 
 nature.conf <- left_join(nature.conf, subregion)
 
-plot(nature.conf$gov.index, nature.conf$subregion)
+nature.conf2 <- left_join(nature.conf, returns)
+
+
 
 ggplot(nature.conf)+
   geom_boxplot(aes(subregion, gov.index))
 
 sum.conf<- nature.conf %>% 
-  group_by(subregion) %>% summarise(stringency = median(stringency),
+  group_by(subregion) %>% summarise(gov.index.resid = median(gov.index.resid),
                       gov.index = median(gov.index),
-                      nature = median(nature_diff))
+                      nature = median(nature_diff),
+                      nature.res = median(nature_diff.resid))
+
+plot(sum.conf$gov.index.resid, sum.conf$nature.res)
+
+plot(sum.conf$gov.index, sum.conf$nature)
 
 
 
 
-regions.trend <- returns %>% group_by(subregion) %>% 
-            summarise(nature = median(nature_diff.gam, na.rm = T),
-                      nature.res = median(nature_diff.resid.gam, na.rm = T),
-                      necessities = median(Necessities_diff.gam, na.rm = T),
-                      necessities.res = median(Necessities_diff.resid.gam, na.rm = T),
-                      luxuries = median(Luxury_diff.gam, na.rm = T),
-                      luxuries.res = median(Luxury_diff.resid.gam, na.rm = T),
-                      long=mean(long, na.rm = T),
-                      lat=mean(lat, na.rm = T),
-                      countries = n()) %>%
-            arrange(nature)
+
+
+
 ```
 
 
