@@ -1125,15 +1125,6 @@ ggsave("Fig. S1.png",
        width = 120, height = 75, unit = "mm")
 
 
-ggplot(can) +
-  theme_bw()+
-  geom_line(aes(Date, Nature), alpha = 0.2)+
-   geom_line(aes(Date, Residential), colour = "green", alpha = 0.4)+
-  geom_line(aes(Date, res.Nature), colour = "blue", alpha = 0.4)+
-   #geom_point(aes(Date,center.Nat),colour = "blue",  alpha = 0.2)+
-    geom_line(aes(Date, Nature.pred), colour = "black", size = 1.25)+
-  geom_line(aes(Date, Nature.pred.resid), colour = "blue", size = 1.25)+
-    geom_line(aes(Date, home.pred), colour = "green", size = 1.25)
 
 ```
 
