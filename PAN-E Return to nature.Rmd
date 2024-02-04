@@ -228,130 +228,6 @@ ggplot(google_countries) +
 ```
 
 
-## Run GAM models through the data to describe the overall net trend
-
-```{r}
-
-## Add a number column to substitute for date in the model
-google_countries <- google_countries %>% group_by(country) %>% mutate(time = 1:n())
-
-# Create an empty list to store gam predictions for each country
-# RAW DATA
-predict_lux <- list()
-predict_nat <- list()
-predict_nec <- list()
-
-# DETRENDED DATA (RESIDUALS)
-predict_lux.resid <- list()
-predict_nat.resid <- list()
-predict_nec.resid <- list()
-
-# Loop through each country
-for (i in unique(google_countries$country)) {
-  
-  # Subset the data for the current country
-  country_data <- subset(google_countries, country == i)
-  
-  # RAW DATA
-  # Fit the GAM models 
-  # k = 30 for the number of months in the dataset
-  gam_lux.pred <- gam(Luxury ~ s(time, k = 30), data = country_data)
-  gam_nat.pred <- gam(Nature ~ s(time, k = 30), data = country_data)
-  gam_nec.pred <- gam(Necessities ~ s(time, k = 30), data = country_data)
-  
-  # Extract GAM trend line and store in the lists
-  # This gives the overall net trend 
-  predict_lux[[i]] <- predict.gam(gam_lux.pred, type="response")
-  predict_nat[[i]] <- predict.gam(gam_nat.pred, type="response")
-  predict_nec[[i]] <- predict.gam(gam_nec.pred, type="response")
-  
-  # DETRENDED DATA
-  # Fit the GAM models 
-  gam_lux.pred.resid <- gam(center.Lux ~ s(time, k = 30), data = country_data)
-  gam_nat.pred.resid <- gam(center.Nat ~ s(time, k = 30), data = country_data)
-  gam_nec.pred.resid <- gam(center.Nec ~ s(time, k = 30), data = country_data)
-  
-  # Extract gam trends and store in the lists
-  predict_lux.resid[[i]] <- predict.gam(gam_lux.pred.resid, type="response")
-  predict_nat.resid[[i]] <- predict.gam(gam_nat.pred.resid, type="response")
-  predict_nec.resid[[i]] <- predict.gam(gam_nec.pred.resid, type="response")
-}
-
-
-
-# Add gam trends back to the original dataframe
-## There are some NAs in the data, so have to do a couple more steps 
-## because they don't match up by just joining
-## have to do this for each mobility category
-
-# Luxury
-google_countries2 <- google_countries %>% drop_na(Luxury)
-google_countries2$Luxury.pred <- unlist(lapply(countries, function(country) predict_lux[[country]]))
-google_countries2$Luxury.pred.resid <- unlist(lapply(countries, function(country) predict_lux.resid[[country]]))
-google_countries <- left_join(google_countries, google_countries2)
-
-# Nature
-google_countries2 <- google_countries %>% drop_na(Nature)
-google_countries2$Nature.pred <- unlist(lapply(countries, function(country) predict_nat[[country]]))
-google_countries2$Nature.pred.resid <- unlist(lapply(countries, function(country) predict_nat.resid[[country]]))
-google_countries <- left_join(google_countries, google_countries2)
-
-# Necessities
-google_countries2 <- google_countries %>% drop_na(Necessities)
-google_countries2$Necessities.pred <- unlist(lapply(countries, function(country) predict_nec[[country]]))
-google_countries2$Necessities.pred.resid <- unlist(lapply(countries, function(country) predict_nec.resid[[country]]))
-google_countries <- left_join(google_countries, google_countries2)
-
-
-# Plot Luxury
-ggplot(filter(google_countries, country %in% c("Australia", "Canada", "Costa Rica", "Zimbabwe"))) +
-  theme_bw()+
-  geom_point(aes(Date, Luxury), alpha = 0.2)+
-   #geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,center.Lux),colour = "blue",  alpha = 0.2)+
-  geom_line(aes(Date, Luxury.pred), colour = "black", size = 1.25)+
-  geom_line(aes(Date, Luxury.pred.resid), colour = "blue", size = 1.25)+
-  facet_wrap(~country, scales = "free_y")
-
-
-# Plot Nature
-ggplot(filter(google_countries, country %in% c("Australia", "Canada", "Costa Rica", "Zimbabwe"))) +
-  theme_bw()+
-  geom_point(aes(Date, Nature), alpha = 0.2)+
-   #geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,center.Nat),colour = "blue",  alpha = 0.2)+
-    geom_line(aes(Date, Nature.pred), colour = "black", size = 1.25)+
-  geom_line(aes(Date, Nature.pred.resid), colour = "blue", size = 1.25)+
-  facet_wrap(~country, scales = "free_y")
-
-ggplot(filter(google_countries, country %in% c("Canada", "United Kingdom", "Norway", "United States"))) +
-  theme_bw()+
-  geom_line(aes(Date, Nature), colour = "#00868B")+
-   #geom_point(aes(Date,res.Nature),colour = "red", alpha = 0.4)+
-   #geom_point(aes(Date,center.Nat),colour = "blue",  alpha = 0.2)+
-    #geom_line(aes(Date, Nature.pred), colour = "black", size = 1.25)+
-  #geom_line(aes(Date, Nature.pred.resid), colour = "blue", size = 1.25)+
-  facet_wrap(~country, scales = "free_y")+
-  ylab("Change in Mobility (%)")+
-   theme(panel.grid.major = element_blank(), # remove the major lines
-        panel.grid.minor = element_blank())
-
-
-# Plot Necessities
-ggplot(filter(google_countries, country %in% c("Australia", "Canada", "Costa Rica", "Zimbabwe"))) +
-  theme_bw()+
-  geom_point(aes(Date, Necessities), alpha = 0.2)+
-  # geom_point(aes(Date,res.Necessities),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,center.Nec),colour = "blue",  alpha = 0.2)+
-    geom_line(aes(Date, Necessities.pred), colour = "black", size = 1.25)+
-  geom_line(aes(Date, Necessities.pred.resid), colour = "blue", size = 1.25)+
-  facet_wrap(~country, scales = "free_y")
-
-```
-
-
-
-
 
 ## Find the day people were home the most (peak lockdown)
 
@@ -402,20 +278,6 @@ nature.resid <- google_countries %>% group_by(country, ISO3) %>%
                       nature_diff.resid = nature_zero.resid - home) # calc difference 
 
 
-# Nature raw resid
-nature.gam <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & Nature.pred > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      nature_zero.gam = min(Date), # The first date people returned to nature
-                      nature_diff.gam = nature_zero.gam - home) # calc difference 
-
-# Nature raw resid
-nature.resid.gam <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & Nature.pred.resid > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      nature_zero.resid.gam = min(Date), # The first date people returned to nature
-                      nature_diff.resid.gam = nature_zero.resid.gam - home) # calc difference 
-
 
 ## NECESSITIES
 # Necessities raw
@@ -432,22 +294,6 @@ Necessities.resid <- google_countries %>% group_by(country, ISO3) %>%
             summarise(home =  min(max.home), # the date people were home most
                       Necessities_zero.resid = min(Date), # The first date people returned to Necessities
                       Necessities_diff.resid = Necessities_zero.resid - home) # calc difference 
-
-
-# Necessities raw resid
-Necessities.gam <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & Necessities.pred > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      Necessities_zero.gam = min(Date), # The first date people returned to Necessities
-                      Necessities_diff.gam = Necessities_zero.gam - home) # calc difference 
-
-# Necessities raw resid
-Necessities.resid.gam <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & Necessities.pred.resid > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      Necessities_zero.resid.gam = min(Date), # The first date people returned to Necessities
-                      Necessities_diff.resid.gam = Necessities_zero.resid.gam - home) # calc difference 
-
 
 
 
@@ -468,34 +314,14 @@ Luxury.resid <- google_countries %>% group_by(country, ISO3) %>%
                       Luxury_diff.resid = Luxury_zero.resid - home) # calc difference 
 
 
-# Luxury raw resid
-Luxury.gam <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & Luxury.pred > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      Luxury_zero.gam = min(Date), # The first date people returned to Luxury
-                      Luxury_diff.gam = Luxury_zero.gam - home) # calc difference 
-
-# Luxury raw resid
-Luxury.resid.gam <- google_countries %>% group_by(country, ISO3) %>% 
-            filter(Date > max.home & Luxury.pred.resid > 0) %>%
-            summarise(home =  min(max.home), # the date people were home most
-                      Luxury_zero.resid.gam = min(Date), # The first date people returned to Luxury
-                      Luxury_diff.resid.gam = Luxury_zero.resid.gam - home) # calc difference 
-
 
 ## Join all data
 ## Join all the nature dataframes
 returns <- left_join(nature, nature.resid)%>% ## nature
-          left_join(., nature.gam) %>%
-          left_join(., nature.resid.gam) %>%
           left_join(., Luxury) %>% ## luxury
           left_join(., Luxury.resid) %>%
-          left_join(., Luxury.gam) %>%
-          left_join(., Luxury.resid.gam) %>%
           left_join(., Necessities) %>% ## necessities
-          left_join(., Necessities.resid) %>%
-          left_join(., Necessities.gam) %>%
-          left_join(., Necessities.resid.gam)
+          left_join(., Necessities.resid)
 
 
 # Global median for return dates
@@ -503,20 +329,14 @@ returns <- left_join(nature, nature.resid)%>% ## nature
 # NECESSITIES
 median(returns$Necessities_diff, na.rm = T) # 48 after peak lockdown
 median(returns$Necessities_diff.resid, na.rm = T) # 77 days
-median(returns$Necessities_diff.gam, na.rm = T) # 106 days
-median(returns$Necessities_diff.resid.gam, na.rm = T) # 313 days
 
 # NATURE
 median(returns$nature_diff, na.rm = T) # 76 after peak lockdown
 median(returns$nature_diff.resid, na.rm = T) # 129 days
-median(returns$nature_diff.gam, na.rm = T) # 97 days
-median(returns$nature_diff.resid.gam, na.rm = T) # 259 days
 
 # LUXURY
 median(returns$Luxury_diff, na.rm = T) # 153 after peak lockdown
 median(returns$Luxury_diff.resid, na.rm = T) # 324 days
-median(returns$Luxury_diff.gam, na.rm = T) # 398 days
-median(returns$Luxury_diff.resid.gam, na.rm = T) # 513 days
 
 ```
 
@@ -585,25 +405,9 @@ regions.pulse <- returns %>% group_by(subregion) %>%
 regions.pulse[9, 9] <- -9.940104 # lat
 regions.pulse[9, 8] <- 149.465633 # long
 
-
-## Overall net trend
-## Summarise the subregion/continental differences
-regions.trend <- returns %>% group_by(subregion) %>% 
-            summarise(nature = median(nature_diff.gam, na.rm = T),
-                      nature.res = median(nature_diff.resid.gam, na.rm = T),
-                      necessities = median(Necessities_diff.gam, na.rm = T),
-                      necessities.res = median(Necessities_diff.resid.gam, na.rm = T),
-                      luxuries = median(Luxury_diff.gam, na.rm = T),
-                      luxuries.res = median(Luxury_diff.resid.gam, na.rm = T),
-                      long=mean(long, na.rm = T),
-                      lat=mean(lat, na.rm = T),
-                      countries = n()) %>%
-            arrange(nature)
-
-
 # Save
 write.csv(regions.pulse, "regions_pulse.csv")
-write.csv(regions.trend, "regions_trend.csv")
+
 
 ## Colour countries that we have used
 # Set colors
@@ -636,6 +440,8 @@ ggsave("map plot.pdf",
 ```
 
 ## Bar plots of regional trends - Pulse back - Raw data
+
+These bars are manually added onto the map outside of R. 
 
 ```{r}
 
@@ -675,7 +481,7 @@ bars <- ggplot(data = map.regions,
     scale_x_discrete(expand = c(0.07,0)) 
 
 # Save the plot
-ggsave("bars_plot_pulse_raw.pdf", 
+ggsave("Figure 3.pdf", 
        width = 150, height = 100, unit = "mm")
 ```
 
@@ -704,77 +510,15 @@ map.regions.res$mob <- "mob"
 
 
 # Save the plot
-ggsave("bars_plot_pulse_resid.pdf", 
+ggsave("Figure S2.pdf", 
        width = 150, height = 90, unit = "mm")
 
 ```
-
-## Bar plots of regional trends - overall trend - Raw gam
-
-```{r}
-
-# Gather the data for plotting
-map.regions.trend <- regions.trend %>% 
-            select(subregion, countries, 
-                   nature, luxuries, necessities, 
-                   long, lat)  %>%
-            gather(Mobility, Difference, nature:necessities)
-
-# define for plotting
-map.regions.trend$mob <- "mob"
-
-## plot the number of day after peak lockdown
-ggplot(data = map.regions.trend,
-       aes(x = mob, y = Difference, fill = Mobility)) +
-     scale_fill_viridis(discrete = TRUE, direction = -1)+
-    geom_bar(stat= "identity",width = 0.1, position = position_dodge(0.12))+
-    facet_wrap(~subregion, strip.position = "bottom")+
-    plot.theme+
-    scale_x_discrete(expand = c(0.07,0))
-
-
-# Save the plot
-ggsave("bars_plot_pulse_raw.pdf", 
-       width = 150, height = 90, unit = "mm")
-```
-
-## Bar plot - Pulse back - Detrended seasonal data
-
-```{r}
-
-# Gather the data for plotting
-map.regions.res.trend <- regions.trend %>% 
-            select(subregion, countries, 
-                   nature.res, luxuries.res, necessities.res, 
-                   long, lat)  %>%
-            gather(Mobility, Difference, nature.res:necessities.res)
-
-# define for plotting
-map.regions.res.trend$mob <- "mob"
-
-
-## plot the number of day after peak lockdown
- ggplot(data = map.regions.res.trend,
-       aes(x = mob, y = Difference, fill = Mobility)) +
-     scale_fill_viridis(discrete = TRUE, direction = -1)+
-    geom_bar(stat= "identity",width = 0.1, position = position_dodge(0.12))+
-    facet_wrap(~subregion, strip.position = "bottom")+
-    plot.theme+
-    scale_x_discrete(expand = c(0.07,0))
-
-
-# Save the plot
-ggsave("bars_plot_pulse_resid.pdf", 
-       width = 150, height = 90, unit = "mm")
-
-```
-
-
 
 ## Global plot for time at nature, necessities, luxuries
 
+This is a plot just to visualise general trends and is not included in the manuscript.
 Here we calculate and plot the global median change of time at nature, necessities, luxuries after lockdown.
-
 
 ```{r}
 library(dplyr); library(tidyr)
@@ -816,27 +560,9 @@ ggsave("time plot.pdf",
 ```
 
 
-## Combine the plots 
-
-We manually place the bar plots onto the map.
-
-```{r}
-
-library(patchwork)
-
-map.plot / timeplot + plot_layout(height=c(2,1))
-
-# Install ggview
-remotes::install_github("idmn/ggview")
-library(ggview)
-ggview(units = "mm", width = 150, height = 90)
-
-```
-
-
 ## Explore confinement differences
 
-The intensity of government measures in the period between peak lockdown and the pulse back to nature for each country
+The intensity of government response measures in the period between peak lockdown and the pulse back to nature for each country
 
 ```{r}
 library(RCurl)
@@ -848,18 +574,17 @@ x <- getURL("https://raw.githubusercontent.com/OxCGRT/covid-policy-dataset/main/
 confinement <- read.csv(text = x)
 
 # Subset data
-
 confinement <- confinement %>% select(ISO3=CountryCode,CountryName:Date,
                                       C1M_combined_numeric:C8EV_combined,
                                       StringencyIndex_Average, GovernmentResponseIndex_Average)
 
+# Further subset
 confinement <- confinement %>% filter(Jurisdiction == "NAT_TOTAL")
 
 
 # Set the date as POSIXct
 confinement$Date <- as.character(confinement$Date)
 confinement$Date <- as.POSIXct(confinement$Date, format='%Y%m%d')
-
 
 
 # Join the Google data with the confinement data
@@ -928,6 +653,9 @@ nature.conf$nature.res <- as.numeric(nature.conf$nature_diff.resid)
 cor.test(sum.conf$gov.index, sum.conf$nature2, method = c("pearson"))
 cor.test(sum.conf$gov.index.resid, sum.conf$nature.res2, method = c("pearson"))
 
+
+
+## Create Figure 4
 library(ggpubr)
 ggscatter(sum.conf, x = "gov.index", y = "nature2", 
           add = "reg.line", conf.int = TRUE, 
@@ -935,178 +663,31 @@ ggscatter(sum.conf, x = "gov.index", y = "nature2",
           cor.coef = TRUE, cor.method = "pearson",
           xlab = "Government Response Index", ylab = "Number of Days to Return to Nature")
 
-
 # Save the plot
 ggsave("Figure 4.pdf", 
        width = 120, height = 100, unit = "mm")
 
 
+## Plot for Appendix - sensitivity test - Fig S3
 ggscatter(sum.conf, x = "gov.index.resid", y = "nature.res2", 
           add = "reg.line", conf.int = TRUE, 
           cor.coef = TRUE, cor.method = "pearson",
           cor.coeff.args = list(label.x = 52, label.sep = "\n"),
           xlab = "Government Response Index", ylab = "Number of days to return to nature")
 
-
-ggsave("Figure S2.pdf", 
+ggsave("Figure S3.pdf", 
          width = 120, height = 100, unit = "mm")
 
 
-
-
 ```
 
 
 
-
-
-
-## Run GAM models through the data to describe the overall net trend
+## Make plot for Appendix - Figure S1
 
 ```{r}
 
-## Add a number column to substitute for date in the model
-google_countries <- google_countries %>% group_by(country) %>% mutate(time = 1:n())
-
-# Create an empty list to store gam predictions for each country
-# RAW DATA
-predict_lux <- list()
-predict_nat <- list()
-predict_nec <- list()
-predict_home <- list()
-
-# DETRENDED DATA (RESIDUALS)
-predict_lux.resid <- list()
-predict_nat.resid <- list()
-predict_nec.resid <- list()
-
-# Loop through each country
-for (i in unique(google_countries$country)) {
-  
-  # Subset the data for the current country
-  country_data <- subset(google_countries, country == i)
-  
-  # RAW DATA
-  # Fit the GAM models 
-  # k = 30 for the number of months in the dataset
-  gam_lux.pred <- gam(Luxury ~ s(time, k = 20), data = country_data)
-  gam_nat.pred <- gam(Nature ~ s(time, k = 20), data = country_data)
-  gam_nec.pred <- gam(Necessities ~ s(time, k = 20), data = country_data)
-  gam_home.pred <- gam(Residential ~ s(time, k = 20), data = country_data)
-  
-  # Extract GAM trend line and store in the lists
-  # This gives the overall net trend 
-  predict_lux[[i]] <- predict.gam(gam_lux.pred, type="response")
-  predict_nat[[i]] <- predict.gam(gam_nat.pred, type="response")
-  predict_nec[[i]] <- predict.gam(gam_nec.pred, type="response")
-  predict_home[[i]] <- predict.gam(gam_home.pred, type="response")
-  
-  # DETRENDED DATA
-  # Fit the GAM models 
-  gam_lux.pred.resid <- gam(center.Lux ~ s(time, k = 20), data = country_data)
-  gam_nat.pred.resid <- gam(center.Nat ~ s(time, k = 20), data = country_data)
-  gam_nec.pred.resid <- gam(center.Nec ~ s(time, k = 20), data = country_data)
-  
-  # Extract gam trends and store in the lists
-  predict_lux.resid[[i]] <- predict.gam(gam_lux.pred.resid, type="response")
-  predict_nat.resid[[i]] <- predict.gam(gam_nat.pred.resid, type="response")
-  predict_nec.resid[[i]] <- predict.gam(gam_nec.pred.resid, type="response")
-}
-
-
-
-# Add gam trends back to the original dataframe
-## There are some NAs in the data, so have to do a couple more steps 
-## because they don't match up by just joining
-## have to do this for each mobility category
-
-# Luxury
-google_countries2 <- google_countries %>% drop_na(Luxury)
-google_countries2$Luxury.pred <- unlist(lapply(countries, function(country) predict_lux[[country]]))
-google_countries2$Luxury.pred.resid <- unlist(lapply(countries, function(country) predict_lux.resid[[country]]))
-google_countries <- left_join(google_countries, google_countries2)
-
-# Nature
-google_countries2 <- google_countries %>% drop_na(Nature)
-google_countries2$Nature.pred <- unlist(lapply(countries, function(country) predict_nat[[country]]))
-google_countries2$Nature.pred.resid <- unlist(lapply(countries, function(country) predict_nat.resid[[country]]))
-google_countries <- left_join(google_countries, google_countries2)
-
-# Necessities
-google_countries2 <- google_countries %>% drop_na(Necessities)
-google_countries2$Necessities.pred <- unlist(lapply(countries, function(country) predict_nec[[country]]))
-google_countries2$Necessities.pred.resid <- unlist(lapply(countries, function(country) predict_nec.resid[[country]]))
-google_countries <- left_join(google_countries, google_countries2)
-
-
-# home
-google_countries2 <- google_countries %>% drop_na(Residential)
-google_countries2$home.pred <- unlist(lapply(countries, function(country) predict_home[[country]]))
-google_countries <- left_join(google_countries, google_countries2)
-
-
-
-
-
-
-
-
-# Plot Luxury
-ggplot(filter(google_countries, country %in% c("Australia", "Canada", "Costa Rica", "Zimbabwe"))) +
-  theme_bw()+
-  geom_point(aes(Date, Luxury), alpha = 0.2)+
-   #geom_point(aes(Date,res.Luxury),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,center.Lux),colour = "blue",  alpha = 0.2)+
-  geom_line(aes(Date, Luxury.pred), colour = "black", size = 1.25)+
-  geom_line(aes(Date, Luxury.pred.resid), colour = "blue", size = 1.25)+
-  facet_wrap(~country, scales = "free_y")
-
-
-
-
-# Plot Necessities
-ggplot(filter(google_countries, country %in% c("Australia", "Canada", "Costa Rica", "Zimbabwe"))) +
-  theme_bw()+
-  geom_point(aes(Date, Necessities), alpha = 0.2)+
-  # geom_point(aes(Date,res.Necessities),colour = "red", alpha = 0.4)+
-   geom_point(aes(Date,center.Nec),colour = "blue",  alpha = 0.2)+
-    geom_line(aes(Date, Necessities.pred), colour = "black", size = 1.25)+
-  geom_line(aes(Date, Necessities.pred.resid), colour = "blue", size = 1.25)+
-  facet_wrap(~country, scales = "free_y")
-
-```
-
-## Make plot for conceptual diagram
-```{r}
-
-
-can <- filter(google_countries, country == "Canada") %>% slice(1:320)
-write.csv(can, "conceptual.csv")
-
-
-conceptual <- read.csv("conceptual.csv")
-conceptual$Date <- as.POSIXct(conceptual$Date, format='%Y-%m-%d')
-
-# Plot Nature
-ggplot(conceptual) +
-  theme_bw(base_size = 15)+
-  geom_hline(yintercept = 0, alpha = 0.4)+
-    geom_line(aes(Date, Nature), colour = "#00868B", size = 1.1)+
-  geom_line(aes(Date, Residential), size = 1.1)+
-    geom_line(aes(Date,Detrended), colour = "Light green", size = 1.1)+
-  #geom_vline(linetype = "dashed", xintercept = as.POSIXct("2020-04-19"))+ # peak lockdown
-  #geom_vline(linetype = "dashed",colour = "#00868B", xintercept = as.POSIXct("2020-05-20"))+ # return nature
- #geom_vline(linetype = "dashed",colour = "Light green", xintercept = as.POSIXct("2020-06-20"))+ # return detrended
-  theme(panel.grid.major = element_blank(), # remove the major lines
-        panel.grid.minor = element_blank())+
-  labs(y = "Change in Mobility (%)")
-
-# Save the plot
-ggsave("conceptual diagram.png", 
-       width = 120, height = 75, unit = "mm")
-
-
-
+## Create plot
 ggplot(filter(google_countries, country %in% c("Canada", "United Kingdom", "Norway", "United States"))) +
   theme_bw()+
   geom_line(aes(Date, Nature), colour = "#00868B")+
@@ -1123,7 +704,6 @@ ggplot(filter(google_countries, country %in% c("Canada", "United Kingdom", "Norw
 # Save the plot
 ggsave("Fig. S1.png", 
        width = 120, height = 75, unit = "mm")
-
 
 
 ```
