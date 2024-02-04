@@ -560,17 +560,20 @@ ggsave("time plot.pdf",
 ```
 
 
-## Explore confinement differences
+## Explore Government response measure differences
 
-The intensity of government response measures in the period between peak lockdown and the pulse back to nature for each country
+The intensity of government response measures in the period between peak lockdown and the pulse back to nature for each country.
+
+These data are downloaded from the Oxford Covid-19 Government Response Tracker project (https://github.com/OxCGRT).
 
 ```{r}
 library(RCurl)
 library(dplyr)
 
-## Load in confinement data
+## Specify data location
 x <- getURL("https://raw.githubusercontent.com/OxCGRT/covid-policy-dataset/main/data/OxCGRT_simplified_v1.csv")
 
+## Load in confinement data
 confinement <- read.csv(text = x)
 
 # Subset data
@@ -592,16 +595,17 @@ confinement$Date <- as.POSIXct(confinement$Date, format='%Y%m%d')
 googleconf <- left_join(google_countries, confinement, by = c("ISO3", "Date"))
 
 
-## NATURE
+
+# Summarise the number of days between lockdown and the return
+# and summarise the median strength of the government response measures
+
 # Nature raw
 nature.conf <- googleconf %>% group_by(country, ISO3) %>% 
             filter(Date > max.home & `Nature` > 0) %>%
             summarise(home =  min(max.home), # the date people were home most
                       nature_zero = min(Date), # The first date people returned to nature
                       nature_diff = nature_zero - home,
-                      stringency = median(StringencyIndex_Average),
                       gov.index = median(GovernmentResponseIndex_Average)) # calc difference 
-
 
 
 # Nature raw resid
@@ -613,46 +617,36 @@ nature.conf.resid <- googleconf %>% group_by(country, ISO3) %>%
                       stringency.resid = median(StringencyIndex_Average),
                       gov.index.resid = median(GovernmentResponseIndex_Average)) # calc difference 
   
-  
+
+## Join the raw data and the detrended data
 nature.conf <- left_join(nature.conf, nature.conf.resid)
   
-
-
+## Extract the subregion information
 subregion <- returns %>% select(ISO3, country, subregion)
 
+# Join the subregion information to confinement dataset
 nature.conf <- left_join(nature.conf, subregion)
 
-nature.conf2 <- left_join(nature.conf, returns)
-
-
-
-ggplot(nature.conf)+
-  geom_boxplot(aes(subregion, gov.index))
-
+# Summarise the median covernment response measure for each world region
 sum.conf<- nature.conf %>% 
   group_by(subregion) %>% summarise(gov.index.resid = median(gov.index.resid),
                       gov.index = median(gov.index),
                       nature = median(nature_diff),
                       nature.res = median(nature_diff.resid))
 
+## Quick visualisation
 plot(sum.conf$gov.index.resid, sum.conf$nature.res)
-
 plot(sum.conf$gov.index, sum.conf$nature)
 
-
-
-ggplot(filter(google_countries, country == "Canada"))+
-  geom_line(aes(Date, Residential))
-
+## Define the variables as numeric for the analysis
 sum.conf$nature2 <- as.numeric(sum.conf$nature)
 sum.conf$nature.res2 <- as.numeric(sum.conf$nature.res)
-
 nature.conf$nature <- as.numeric(nature.conf$nature_diff)
 nature.conf$nature.res <- as.numeric(nature.conf$nature_diff.resid)
 
+## Run pearson correlatino test
 cor.test(sum.conf$gov.index, sum.conf$nature2, method = c("pearson"))
 cor.test(sum.conf$gov.index.resid, sum.conf$nature.res2, method = c("pearson"))
-
 
 
 ## Create Figure 4
